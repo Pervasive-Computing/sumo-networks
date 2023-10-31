@@ -1,0 +1,16 @@
+<configuration>
+    <input>
+        <net-file value="horsens.net.xml"/>
+        <route-files value="horsens.rou.xml"/>
+        <additional-files value="horsens.poly.xml"/>
+    </input>
+    <time>
+        <begin value="0"/>
+        <step-length value="0.01"/>
+        <end value="20000"/>
+    </time>
+    <gui_only>
+        <delay value="80"/>
+        <start value="true"/>
+    </gui_only>
+</configuration>

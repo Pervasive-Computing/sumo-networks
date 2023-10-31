@@ -1,0 +1,16 @@
+<configuration>
+    <input>
+        <net-file value="katrinebjerg-big.net.xml"/>
+        <route-files value="katrinebjerg-big.rou.xml"/>
+		<additional-files value="katrinebjerg-big.poly.xml"/>
+    </input>
+    <time>
+        <begin value="0"/>
+        <step-length value="0.01"/> <!-- 100 steps per second - seems realistic -->
+        <end value="20000"/>
+    </time>
+    <gui_only>
+        <!-- <delay value="80"/> -->
+        <start value="true"/>
+    </gui_only>
+</configuration>
