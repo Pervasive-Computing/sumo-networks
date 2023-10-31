@@ -1,0 +1,12 @@
+<configuration>
+    <input>
+        <net-file value="katrinebjerg.net.xml"/>
+        <route-files value="katrinebjerg.rou.xml"/>
+		<!-- <gui-settings-file value="text.settings.xml"/> -->
+		 <additional-files value="katrinebjerg.poly.xml"/>
+    </input>
+    <time>
+        <begin value="0"/>
+        <end value="10000"/>
+    </time>
+</configuration>
