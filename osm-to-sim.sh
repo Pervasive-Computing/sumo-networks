@@ -61,11 +61,11 @@ cat << EOF > "$file_prefix.sumocfg"
     </input>
     <time>
         <begin value="0"/>
-        <step-length value="0.001"/>
+        <step-length value="0.1"/>
         <end value="20000"/>
     </time>
     <gui_only>
-        <delay value="1"/>
+        <delay value="0"/>
         <start value="true"/>
     </gui_only>
 </configuration>

@@ -126,32 +126,29 @@ class SimulationParameters:
         assert 0 < self.max_steps, f"{self.max_steps = } < 0"
 
 
-sim_params = SimulationParameters(max_steps=1000)
+sim_params = SimulationParameters(max_steps=100_000)
 
 print(f"{sim_params = }")
 
-junctions = traci.junction.getIDList()
+# junctions = traci.junction.getIDList()
+# print(f"{junctions = }")
 
-
-print(f"{junctions = }")
-
-show(f"{traci.junction.__dict__ = }")
+# show(f"{traci.junction.__dict__ = }")
 
 dt: float = traci.simulation.getDeltaT()
 print(f"{dt = }")
-# step: int = 0
-# while step < sim_params.max_steps:
-#     traci.simulationStep()
-#     # if traci.inductionloop.getLastStepVehicleNumber("0") > 0:
-#     #     traci.trafficlight.setRedYellowGreenState("0", "GrGr")
-#     step += 1
-#     time.sleep(0.1)
-
-# traci.close()
+step: int = 0
+while step < sim_params.max_steps:
+    traci.simulationStep()
+    # if traci.inductionloop.getLastStepVehicleNumber("0") > 0:
+    #     traci.trafficlight.setRedYellowGreenState("0", "GrGr")
+    step += 1
+    # time.sleep(0.1)
 
 
 # x, y = traci.vehicle.getPosition(vehID)
-
 show(f"{traci.lane.__dict__ = }")
 show(f"{traci.vehicle.__dict__ = }")
 show(f"{traci.trafficlight.__dict__ = }")
+
+traci.close()
