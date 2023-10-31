@@ -9,7 +9,7 @@ from dataclasses import dataclass
 import time
 import math
 from datetime import datetime
-
+import logging
 
 # Check if rich is installed, and only import it if it is.
 try:
@@ -31,8 +31,59 @@ import traci
 import traci.constants as tc
 
 
-scriptname: str = os.path.basename(__file__).removesuffix(".py")
-argparser = argparse.ArgumentParser(prog=scriptname)
+## ANSI escape sequences for colors
+class LogColors:
+    RESET = "\033[0m"
+    RED = "\033[31m"
+    GREEN = "\033[32m"
+    YELLOW = "\033[33m"
+    BLUE = "\033[34m"
+
+class CustomFormatter(logging.Formatter):
+    """Logging Formatter to add colors and time stamp"""
+
+    # format = "%(asctime)s - [%(levelname)s] - %(message)s"
+
+    FORMATS = {
+        logging.DEBUG: LogColors.BLUE,
+        logging.INFO: LogColors.GREEN,
+        logging.WARNING: LogColors.YELLOW,
+        logging.ERROR: LogColors.RED,
+        logging.CRITICAL: LogColors.RED,
+    }
+
+    def format(self, record):
+        color: str = self.FORMATS.get(record.levelno)
+        log_fmt = f"%(asctime)s - {color}[%(levelname)s]{LogColors.RESET} - %(message)s"
+        formatter = logging.Formatter(log_fmt, "%Y-%m-%d %H:%M:%S")
+        return formatter.format(record)
+
+class LevelNameFilter(logging.Filter):
+    def filter(self, record):
+        level_to_name = {
+            'WARNING': 'warn',
+            'ERROR': 'error',
+            'INFO': 'info'
+        }
+        record.levelname = level_to_name.get(record.levelname, record.levelname.lower())
+        return True
+
+# Create a logger
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+# Create a console handler and set format with a timestamp
+handler = logging.StreamHandler()
+handler.setFormatter(CustomFormatter())
+
+# Add filter to handler to modify level names
+handler.addFilter(LevelNameFilter())
+
+# Add the handler to the logger
+logger.addHandler(handler)
+
+SCRIPTNAME: str = os.path.basename(__file__).removesuffix(".py")
+argparser = argparse.ArgumentParser(prog=SCRIPTNAME)
 
 argparser.add_argument("sumocfg", help="Path to SUMO configuration file")
 argparser.add_argument("--log", action="store_true",help="Log to log.txt")
@@ -41,10 +92,10 @@ argparser.add_argument("-v", "--verbose", action="store_true", help="Verbose out
 args = argparser.parse_args()
 
 if args.verbose:
-    def show(*args, **kwargs):
+    def show(*args, **kwargs) -> None:
         return print(*args, **kwargs)
 else:
-    def show(*args, **kwargs):
+    def show(*args, **kwargs) -> None:
         pass
 
 show(f"{traci.__file__ = }")
@@ -70,8 +121,8 @@ tc_values = list(tc.__dict__.values())
 show(f"{traci = }")
 show(traci.__dict__.keys())
 
-# Check if running in Windows Subsystem for Linux
-def is_wsl():
+def running_in_wsl() -> bool:
+    """ Check if interpreter process is running in Windows Subsystem for Linux """
     try:
         with open('/proc/version', 'r') as f:
             if 'microsoft' in f.read().lower():
@@ -80,13 +131,13 @@ def is_wsl():
         pass
     return False
 
-postfix = ""
+postfix: str = ".exe" if running_in_wsl() else ""
 
-if is_wsl():
-    print("Running in Windows Subsystem for Linux")
-    postfix = ".exe"
-else:
-    print("Not running in WSL")
+# if running_in_wsl():
+#     print("Running in Windows Subsystem for Linux")
+#     postfix = ".exe"
+# else:
+#     print("Not running in WSL")
 
 # Binaries
 SUMO_BIN: str | None = shutil.which(f"sumo{postfix}")
@@ -116,7 +167,6 @@ if args.log:
     sumo_cmd += ["--log", logfile]
 print(f"{sumo_cmd = }")
 
-traci.start(sumo_cmd, label="sim0")
 
 @dataclass(frozen=True)
 class SimulationParameters:
@@ -135,6 +185,8 @@ print(f"{sim_params = }")
 
 # show(f"{traci.junction.__dict__ = }")
 
+logger.info("Starting SUMO")
+traci.start(sumo_cmd, label="sim0")
 dt: float = traci.simulation.getDeltaT()
 print(f"{dt = }")
 step: int = 0
