@@ -70,10 +70,29 @@ tc_values = list(tc.__dict__.values())
 show(f"{traci = }")
 show(traci.__dict__.keys())
 
-SUMO_BIN: str | None = shutil.which("sumo")
+# Check if running in Windows Subsystem for Linux
+def is_wsl():
+    try:
+        with open('/proc/version', 'r') as f:
+            if 'microsoft' in f.read().lower():
+                return True
+    except FileNotFoundError:
+        pass
+    return False
+
+postfix = ""
+
+if is_wsl():
+    print("Running in Windows Subsystem for Linux")
+    postfix = ".exe"
+else:
+    print("Not running in WSL")
+
+# Binaries
+SUMO_BIN: str | None = shutil.which(f"sumo{postfix}")
 assert SUMO_BIN is not None, f"sumo was not found in PATH: {sys.path}"
 
-SUMO_GUI_BIN: str | None = shutil.which("sumo-gui")
+SUMO_GUI_BIN: str | None = shutil.which(f"sumo-gui{postfix}")
 assert SUMO_GUI_BIN is not None, f"sumo-gui was not found in PATH: {sys.path}"
 
 print(f"{SUMO_BIN = }")
@@ -83,6 +102,11 @@ show(f"{args = }")
 
 sumocfg = Path(args.sumocfg)
 assert sumocfg.exists(), f"SUMO configuration file not found: {sumocfg}"
+
+os.chdir(sumocfg.parent)
+sumocfg = sumocfg.name
+
+print(f"{os.getcwd() = }")
 
 sumo_cmd: list[str] = [SUMO_GUI_BIN, "-c", str(sumocfg)]
 if args.log:
