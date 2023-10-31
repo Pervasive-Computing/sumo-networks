@@ -22,14 +22,37 @@ except ImportError or ModuleNotFoundError:
 
 if 'SUMO_HOME' in os.environ:
     sys.path.append(os.path.join(os.environ['SUMO_HOME'], 'tools'))
+else:
+    print("'Please declare the environment variable \"SUMO_HOME\"", file=sys.stderr)
+    sys.exit(1)
 
 import traci
-print(f"{traci.__file__ = }")
-print(f"{traci.__path__ = }")
 # import libsumo as traci
-
 import traci.constants as tc
-print(f"{tc.__file__    = }")
+
+
+scriptname: str = os.path.basename(__file__).removesuffix(".py")
+argparser = argparse.ArgumentParser(prog=scriptname)
+
+argparser.add_argument("sumocfg", help="Path to SUMO configuration file")
+argparser.add_argument("--log", action="store_true",help="Log to log.txt")
+argparser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
+
+args = argparser.parse_args()
+
+if args.verbose:
+    def show(*args, **kwargs):
+        return print(*args, **kwargs)
+else:
+    def show(*args, **kwargs):
+        pass
+
+show(f"{traci.__file__ = }")
+show(f"{traci.__path__ = }")
+show(f"{traci.isLibtraci() = }")
+show(f"{traci.isLibsumo()  = }")
+
+show(f"{tc.__file__    = }")
 
 # Print all constants in traci.constants
 tc_items = sorted(list(tc.__dict__.items()), key=lambda it: it[0])
@@ -44,7 +67,8 @@ tc_values = list(tc.__dict__.values())
 
 # sys.exit(0)
 
-print(f"{traci = }")
+show(f"{traci = }")
+show(traci.__dict__.keys())
 
 SUMO_BIN: str | None = shutil.which("sumo")
 assert SUMO_BIN is not None, f"sumo was not found in PATH: {sys.path}"
@@ -55,21 +79,17 @@ assert SUMO_GUI_BIN is not None, f"sumo-gui was not found in PATH: {sys.path}"
 print(f"{SUMO_BIN = }")
 print(f"{SUMO_GUI_BIN = }")
 
-print(traci.__dict__.keys())
-
-scriptname: str = os.path.basename(__file__).removesuffix(".py")
-argparser = argparse.ArgumentParser(prog=scriptname)
-
-argparser.add_argument("sumocfg", help="Path to SUMO configuration file")
-
-args = argparser.parse_args()
-
-print(f"{args = }")
+show(f"{args = }")
 
 sumocfg = Path(args.sumocfg)
 assert sumocfg.exists(), f"SUMO configuration file not found: {sumocfg}"
 
 sumo_cmd: list[str] = [SUMO_GUI_BIN, "-c", str(sumocfg)]
+if args.log:
+    timestr = datetime.now().strftime("%Y%m%d-%H%M%S")
+    logfile = f"log-{timestr}.log"
+    assert Path(logfile).exists() is False, f"Log file already exists: {logfile}"
+    sumo_cmd += ["--log", logfile]
 print(f"{sumo_cmd = }")
 
 traci.start(sumo_cmd, label="sim0")
@@ -84,12 +104,14 @@ class SimulationParameters:
 
 sim_params = SimulationParameters(max_steps=1000)
 
+print(f"{sim_params = }")
+
 junctions = traci.junction.getIDList()
 
 
 print(f"{junctions = }")
 
-print(f"{traci.junction.__dict__ = }")
+show(f"{traci.junction.__dict__ = }")
 
 dt: float = traci.simulation.getDeltaT()
 print(f"{dt = }")
@@ -105,3 +127,7 @@ print(f"{dt = }")
 
 
 # x, y = traci.vehicle.getPosition(vehID)
+
+show(f"{traci.lane.__dict__ = }")
+show(f"{traci.vehicle.__dict__ = }")
+show(f"{traci.trafficlight.__dict__ = }")
