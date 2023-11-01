@@ -21,6 +21,24 @@ if [ -z "$1" ]; then
     exit 1
 fi
 
+# Check if running in WSL
+if grep -q microsoft /proc/version; then
+    is_wsl=1
+else
+    is_wsl=0
+fi
+
+netconvert_binary="netconvert"
+polyconvert_binary="polyconvert"
+
+# Check if running in WSL
+if [ $is_wsl -eq 1 ]; then
+    echo "Running in WSL"
+    echo "Adding .exe to netconvert and polyconvert"
+    netconvert_binary="$netconvert_binary.exe"
+    polyconvert_binary="$polyconvert_binary.exe"
+fi
+
 osm_file=$1
 
 # extract the name of the file without the extension
@@ -32,7 +50,7 @@ dir=$(dirname "$osm_file")
 file_prefix="$dir/$name"
 
 echo "Creating SUMO network from OSM file"
-netconvert --osm-files "$osm_file" -o "$file_prefix.net.xml" --junctions.join --no-left-connections --tls.discard-simple --tls.default-type actuated --no-turnarounds
+$netconvert_binary --osm-files "$osm_file" -o "$file_prefix.net.xml" --junctions.join --no-left-connections --tls.discard-simple --tls.default-type actuated --no-turnarounds
 # --default.junctions.keep-clear
 # --osm.bike-access --osm.sidewalks --osm.crossings --osm.turn-lanes
 # --tls.guess-signals --tls.guess.joining --tls.rebuild --tls.join --tls.join-dist 100.0 --tls.discard-simple --tls.default-type actuated --tls.ignore-internal-junction-jam --tls.group-signals --tls.left-green.time 10
@@ -47,8 +65,17 @@ echo "Creating SUMO routes from OSM file"
 python "$SUMO_HOME/tools/randomTrips.py" -n "$file_prefix.net.xml" --random-routing-factor 2.0 --insertion-density 100 -e 20000 -L -r "$file_prefix.rou.xml"
 check_fail "randomTrips.py"
 
+typemap_filename="typemap.xml"
+
+echo "Checking if typemap.xml exists in current directory"
+if [ ! -f "typemap.xml" ]; then
+    echo "typemap.xml does not exist in current directory"
+    echo "Copying typemap.xml from $SUMO_HOME/data/typemap/osmPolyconvert.typ.xml"
+    cp "$SUMO_HOME/data/typemap/osmPolyconvert.typ.xml" "$typemap_filename"
+fi
+
 echo "Creating SUMO polygons from OSM file"
-polyconvert --net-file "$file_prefix.net.xml" --osm-files="$osm_file" --type-file="$SUMO_HOME/data/typemap/osmPolyconvert.typ.xml"  -o "$file_prefix.poly.xml"
+$polyconvert_binary --net-file "$file_prefix.net.xml" --osm-files="$osm_file" --type-file="$typemap_filename"  -o "$file_prefix.poly.xml"
 check_fail "polyconvert"
 
 echo "Creating SUMO configuration file"
