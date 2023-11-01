@@ -12,6 +12,7 @@ import time
 import math
 from datetime import datetime
 import logging
+import random
 
 # Check if rich is installed, and only import it if it is.
 try:
@@ -210,21 +211,103 @@ sim_params = SimulationParameters(max_steps=100_000)
 
 print(f"{sim_params = }")
 
+logger.info("Starting SUMO")
+traci.start(sumo_cmd, label="sim0")
+
+
 junctions = traci.junction.getIDList()
 print(f"{junctions = }")
 
+
 # show(f"{traci.junction.__dict__ = }")
 
-logger.info("Starting SUMO")
-traci.start(sumo_cmd, label="sim0")
 dt: float = traci.simulation.getDeltaT()
 print(f"{dt = }")
 step: int = 0
+
+TRACI_VEHICLE_CONSTANTS: list[int] = [
+    tc.VAR_POSITION,
+    # tc.VAR_SIGNALS,
+    # tc.VAR_VEHICLECLASS
+    tc.VAR_SPEED,
+    # tc.VAR_ACCELERATION,
+    tc.VAR_ACCEL,
+]
+
+@dataclass(frozen=True)
+class Vehicle:
+    speed: float
+    x: float
+    y: float
+    angle: float
+
+    def __post_init__(self) -> None:
+        pass
+
+
+class ExampleListener(traci.StepListener):
+    def step(self, t: float) -> bool:
+        print(f"{self.__class__ = } called with parameter {t}")
+        # indicate that the step listener should stay active in the next step
+        return True
+
+traci.addStepListener(ExampleListener())
+
+# traci.vehicle.subscribe(vehID, (tc.VAR_ROAD_ID, tc.VAR_LANEPOSITION))
+# print(traci.vehicle.getSubscriptionResults(vehID))
+
+# Used to keep track of the vehicles in the simulation
+# so we do not subscribe to them more than once
+vehicles: set[int] = set()
+
+t_begin: float = time.time()
 while step < sim_params.max_steps:
+    t_start: float = time.time()
     traci.simulationStep()
-    # if traci.inductionloop.getLastStepVehicleNumber("0") > 0:
-    #     traci.trafficlight.setRedYellowGreenState("0", "GrGr")
+    t_end: float = time.time()
+    t_delta: float = t_end - t_start
+    # print(f"{t_delta = }")
     step += 1
+
+    # use ^ for symmetric difference
+    vehicles_at_this_step: set[int] = set(traci.vehicle.getIDList())
+    new_vehicles: set[int] = vehicles_at_this_step ^ vehicles
+    if new_vehicles != {}:
+        for veh_id in new_vehicles:
+            traci.vehicle.subscribe(veh_id, TRACI_VEHICLE_CONSTANTS)
+            logger.info(f"Subscribed to {veh_id = }")
+
+        vehicles |= new_vehicles
+
+    # sub_results = traci.vehicle.getSubscriptionResults(list(vehicles))
+    sub_results = [traci.vehicle.getSubscriptionResults(veh_id) for veh_id in vehicles]
+    print(f"{sub_results = }")
+
+
+    # if step % 100 == 0:
+    #     print(f"{step = }")
+    #     vehicles = traci.vehicle.getIDList()
+    #     print(f"{vehicles = }")
+    #     print(f"{type(vehicles) = }")
+    #     if len(vehicles) == 0:
+    #         continue
+    #     random_vec_id: int = random.choice(vehicles)
+    #     traci.vehicle.highlight(random_vec_id, color=(255, 0, 0), size=2)
+    #     for vec_id in vehicles:
+    #         speed: float = traci.vehicle.getSpeed(vec_id)
+    #         x, y = traci.vehicle.getPosition(vec_id)
+    #         lon, lat = traci.simulation.convertGeo(x, y)
+    #         x2, y2 = traci.simulation.convertGeo(lon, lat, fromGeo=True)
+
+    #         print(f"{vec_id = } {x = } {y = } {lon = } {lat = } {x2 = } {y2 = }")
+
+    #         traci.vehicle.subscribe(vec_id, TRACI_VEHICLE_CONSTANTS)
+
+            # sub_results = traci.vehicle.getSubscriptionResults()
+            # print(f"{sub_results = }")
+
+
+        # print(f"{vehicles = }")
     # time.sleep(0.1)
 
 
@@ -233,4 +316,4 @@ show(f"{traci.lane.__dict__ = }")
 show(f"{traci.vehicle.__dict__ = }")
 show(f"{traci.trafficlight.__dict__ = }")
 
-traci.close()
+traci.close() # Stop SUMO simulation
