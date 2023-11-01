@@ -50,6 +50,17 @@ files = [
 plugins = ["importlib-metadata"]
 
 [[package]]
+name = "raylib-py"
+version = "4.5.0.post1"
+description = "A simple and easy-to-use library to enjoy videogames programming (written in C)"
+optional = false
+python-versions = ">=3.3"
+files = [
+    {file = "raylib-py-4.5.0.post1.tar.gz", hash = "sha256:198b76c89ae8073ee7c4a0d24c92647df5638f35997d20ac0b93bb9ca7596ec3"},
+    {file = "raylib_py-4.5.0.post1-py3-none-any.whl", hash = "sha256:1e0a3652e2c5bada0053ab08ed82e115125c78071b4ecc9456c405783d220e92"},
+]
+
+[[package]]
 name = "rich"
 version = "13.6.0"
 description = "Render rich text, tables, progress bars, syntax highlighting, markdown and more to the terminal"
@@ -121,7 +132,18 @@ files = [
 [package.dependencies]
 sumolib = ">=1.18.0"
 
+[[package]]
+name = "xmltodict"
+version = "0.13.0"
+description = "Makes working with XML feel like you are working with JSON"
+optional = false
+python-versions = ">=3.4"
+files = [
+    {file = "xmltodict-0.13.0-py2.py3-none-any.whl", hash = "sha256:aa89e8fd76320154a40d19a0df04a4695fb9dc5ba977cbb68ab3e4eb225e7852"},
+    {file = "xmltodict-0.13.0.tar.gz", hash = "sha256:341595a488e3e01a85a9d8911d8912fd922ede5fecc4dce437eb4b6c8d037e56"},
+]
+
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "13579e49a90a3a6bba1eafc0e7eb5f5d1283fe3450c863033edd295f6317eef8"
+content-hash = "0280ff7c5659bef9062cffc928de0271643b8c6d3c64ece600a597a182ecb7d9"
