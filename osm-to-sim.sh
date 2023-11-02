@@ -50,7 +50,7 @@ dir=$(dirname "$osm_file")
 file_prefix="$dir/$name"
 
 echo "Creating SUMO network from OSM file"
-$netconvert_binary --osm-files "$osm_file" -o "$file_prefix.net.xml" --junctions.join --no-left-connections --tls.discard-simple --tls.default-type actuated --no-turnarounds
+$netconvert_binary --osm-files "$osm_file" -o "$file_prefix.net.xml" --junctions.join --tls.discard-simple --tls.default-type actuated --no-turnarounds
 # --default.junctions.keep-clear
 # --osm.bike-access --osm.sidewalks --osm.crossings --osm.turn-lanes
 # --tls.guess-signals --tls.guess.joining --tls.rebuild --tls.join --tls.join-dist 100.0 --tls.discard-simple --tls.default-type actuated --tls.ignore-internal-junction-jam --tls.group-signals --tls.left-green.time 10
@@ -62,7 +62,8 @@ $netconvert_binary --osm-files "$osm_file" -o "$file_prefix.net.xml" --junctions
 check_fail "netconvert"
 
 echo "Creating SUMO routes from OSM file"
-python "$SUMO_HOME/tools/randomTrips.py" -n "$file_prefix.net.xml" --random-routing-factor 2.0 --insertion-density 100 -e 20000 -L -r "$file_prefix.rou.xml"
+# python "$SUMO_HOME/tools/randomTrips.py" -n "$file_prefix.net.xml" --random-routing-factor 2.0 --insertion-density 100 -e 20000 -L -r "$file_prefix.rou.xml"
+python "$SUMO_HOME/tools/randomTrips.py" -n "$file_prefix.net.xml" -e 20000 -L -r "$file_prefix.rou.xml"
 check_fail "randomTrips.py"
 
 typemap_filename="typemap.xml"
