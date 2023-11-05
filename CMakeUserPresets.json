@@ -1,0 +1,9 @@
+{
+    "version": 4,
+    "vendor": {
+        "conan": {}
+    },
+    "include": [
+        "/home/kpbaks/university/semesters/9/pervasive-computing-study-course/sumo-networks/build/CMakePresets.json"
+    ]
+}
