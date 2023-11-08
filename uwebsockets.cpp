@@ -8,10 +8,10 @@ using namespace std::chrono_literals;
 namespace fs = std::filesystem;
 #include <functional>
 #include <iostream>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <thread>
-#include <mutex>
 #include <vector>
 
 #include "debug-macro.hpp"
@@ -35,15 +35,14 @@ auto walkdir(
 #include <argparse/argparse.hpp>
 #include <fmt/core.h>
 #include <nlohmann/json.hpp>
-#include <spdlog/spdlog.h>
-#include <uWebSockets/App.h>
 #include <parallel_hashmap/phmap.h>
 #include <pugixml.hpp>
+#include <spdlog/spdlog.h>
+#include <uWebSockets/App.h>
 
 // for convenience
 using json = nlohmann::json;
 using namespace nlohmann::literals; // for ""_json
-
 
 #include <libsumo/libtraci.h>
 using namespace libtraci;
@@ -167,9 +166,6 @@ auto main(int argc, char **argv) -> int {
     return 2;
   }
 
-  
-
-
   const fs::path cwd = fs::current_path();
 
   if (0 < verbosity) {
@@ -196,14 +192,19 @@ auto main(int argc, char **argv) -> int {
   // Parse the SUMO configuration file
   pugi::xml_document sumocfg_xml_doc;
 
-  pugi::xml_parse_result result = sumocfg_xml_doc.load_file(sumocfg_path.string().c_str());
+  pugi::xml_parse_result result =
+      sumocfg_xml_doc.load_file(sumocfg_path.string().c_str());
   if (!result) {
     spdlog::error("Failed to parse SUMO configuration file: {}",
                   result.description());
     return 1;
   }
 
-  const std::string route_files = sumocfg_xml_doc.child("configuration").child("input").child("route-files").attribute("value").as_string();
+  const std::string route_files = sumocfg_xml_doc.child("configuration")
+                                      .child("input")
+                                      .child("route-files")
+                                      .attribute("value")
+                                      .as_string();
   std::cerr << route_files << std::endl;
 
   const fs::path route_files_path = fs::path(route_files);
@@ -220,7 +221,7 @@ auto main(int argc, char **argv) -> int {
     return 1;
   }
 
-  phmap::flat_hash_map <std::string, Car> cars;
+  phmap::flat_hash_map<std::string, Car> cars;
 
   const auto vehicles = route_files_xml_doc.child("routes").children("vehicle");
   for (const auto &vehicle : vehicles) {
@@ -228,13 +229,9 @@ auto main(int argc, char **argv) -> int {
     spdlog::info("vehicle: {}", vehicle_id);
 
     cars[vehicle_id] = Car{};
-
   }
 
-
-
   // std::exit(0);
-
 
   // If sumocfg is not set in the command line, search for all files in
   // cwd/**/*.sumocfg and print them
@@ -278,19 +275,37 @@ auto main(int argc, char **argv) -> int {
       // TODO: Get (x,y, theta) of all vehicles
       auto vehicles_ids = Vehicle::getIDList();
 
-      for (const auto& id : vehicles_ids) {
+      for (const auto &id : vehicles_ids) {
+        auto &car = cars[id];
+
         const auto position = Vehicle::getPosition(id);
         const int x = position.x;
         const int y = position.y;
 
         const auto heading = Vehicle::getAngle(id);
+        car.x = x;
+        car.y = y;
+        car.heading = heading;
+        car.alive = true;
 
         spdlog::info("id: {} x: {} y: {} heading: {}", id, x, y, heading);
+
+        // item.second.x = x;
+        // item.second.y = y;
+        // item.second.heading = heading;
+
+        //   const auto position = Vehicle::getPosition(id);
+        //   const int x = position.x;
+        //   const int y = position.y;
+
+        //   const auto heading = Vehicle::getAngle(id);
+
+        //   spdlog::info("id: {} x: {} y: {} heading: {}", id, x, y, heading);
       }
-// static libsumo::TraCIPosition position;
 
+      // for (auto& item : cars) {
 
-      // Vehicle::getPosition(const std::string &vehID)
+      // }
 
       // fmt::println("step: {}", i);
       if (i % 100 == 0) {
@@ -314,14 +329,30 @@ auto main(int argc, char **argv) -> int {
                       })
                  .get("/cars",
                       [&](auto *res, auto *req) {
-                        auto car = Car{0, 0};
-                        json j = {
-                            {"x", car.x},
-                            {"y", car.y},
-                        };
+
+                        // Take all cars and convert them to json
+                        json j;
+                        for (const auto& item : cars) {
+                          const Car& car = item.second;
+                          if (!car.alive) {
+                            continue;
+                          }
+                            json carJson = {
+                                {"x", item.second.x},
+                                {"y", item.second.y},
+                                {"heading", item.second.heading},
+                            };
+                            j.push_back(carJson);
+                        }
+
+                        // auto car = Car{0, 0};
+                        // json j = {
+                        //     {"x", car.x},
+                        //     {"y", car.y},
+                        //     {"heading", car.heading},
+                        // };
                         std::string payload = j.dump();
                         res->end(payload);
-                        //  res->end(fmt::format("counter = {}", counter));
                         counter++;
                       })
                  .listen(port, [=](us_listen_socket_t *listen_socket) {
