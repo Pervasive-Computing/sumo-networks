@@ -331,18 +331,34 @@ auto main(int argc, char **argv) -> int {
                       [&](auto *res, auto *req) {
 
                         // Take all cars and convert them to json
+                        // The structure is
+                        // {
+                        //  "vehicle_id_1": {
+                        //    "x": 0,
+                        //    "y": 0,
+                        //    "heading": 0
+                        //  },
+                        //  "vehicle_id_2": {
+                        //    "x": 0,
+                        //    "y": 0,
+                        //    "heading": 0
+                        //  },
+                        //  ...
+                        // }
                         json j;
                         for (const auto& item : cars) {
+
                           const Car& car = item.second;
                           if (!car.alive) {
                             continue;
                           }
-                            json carJson = {
+                          const std::string& vehicle_id = item.first;
+                            json car_as_json = {
                                 {"x", item.second.x},
                                 {"y", item.second.y},
                                 {"heading", item.second.heading},
                             };
-                            j.push_back(carJson);
+                            j[vehicle_id] = car_as_json;
                         }
 
                         // auto car = Car{0, 0};
