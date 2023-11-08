@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.23 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.27.5 FATAL_ERROR)
 project(sumo-network-sim VERSION 0.1.0 LANGUAGES CXX) # ${PROJECT_NAME}
 
 # Set default build type to release
@@ -23,6 +23,8 @@ if(NOT EXISTS $ENV{SUMO_HOME})
     message(FATAL_ERROR "Environment variable SUMO_HOME does not point to a valid directory")
 endif()
 
+message(STATUS "$SUMO_HOME: $ENV{SUMO_HOME}")
+
 # Force compiler to output in color when you use ninja as generator
 # https://stackoverflow.com/questions/73349743/ninja-build-system-gcc-clang-doesnt-output-diagnostic-colors
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fdiagnostics-color=always")
@@ -34,17 +36,18 @@ find_package(uwebsockets REQUIRED)
 find_package(spdlog REQUIRED)
 find_package(argparse REQUIRED)
 find_package(nlohmann_json REQUIRED)
+find_package(pugixml REQUIRED)
+find_package(phmap REQUIRED)
 
-set(external_library_targets fmt::fmt uwebsockets::uwebsockets spdlog::spdlog argparse::argparse nlohmann_json::nlohmann_json)
+set(external_library_targets fmt::fmt uwebsockets::uwebsockets spdlog::spdlog argparse::argparse nlohmann_json::nlohmann_json pugixml::pugixml phmap)
 
-# add_executable(${PROJECT_NAME} traci-sim.cpp)
-
-add_executable(uwebsockets-test uwebsockets.cpp)
-target_link_libraries(uwebsockets-test PRIVATE ${external_library_targets})
+add_executable(${PROJECT_NAME} uwebsockets.cpp)
+target_link_libraries(${PROJECT_NAME} PRIVATE ${external_library_targets})
 
 # Link with SUMO's libtraci
 # g++ -o test -std=c++11 -I$SUMO_HOME/src test.cpp -L$SUMO_HOME/bin -ltracicpp
-target_include_directories(uwebsockets-test PRIVATE $ENV{SUMO_HOME}/src) # Equivalent to -I$SUMO_HOME/src
-# target_link_libraries(uwebsockets-test PRIVATE $ENV{SUMO_HOME}/tools/libtraci/_libtraci.so) # Equivalent to -ltracicpp
-target_link_libraries(uwebsockets-test PRIVATE tracicpp)
-target_link_directories(uwebsockets-test PRIVATE $ENV{SUMO_HOME}/bin) # Equivalent to -L$SUMO_HOME/bin
+target_include_directories(${PROJECT_NAME} PRIVATE $ENV{SUMO_HOME}/src) # Equivalent to -I$SUMO_HOME/src
+# target_include_directories(${PROJECT_NAME} PRIVATE )
+# target_link_libraries(${PROJECT_NAME} PRIVATE $ENV{SUMO_HOME}/tools/libtraci/_libtraci.so) # Equivalent to -ltracicpp
+target_link_libraries(${PROJECT_NAME} PRIVATE tracicpp)
+target_link_directories(${PROJECT_NAME} PRIVATE $ENV{SUMO_HOME}/bin) # Equivalent to -L$SUMO_HOME/bin
