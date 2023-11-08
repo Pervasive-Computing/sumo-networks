@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<!-- generated on 2023-10-25 14:10:26 by Eclipse SUMO polyconvert Version 1.18.0
+<!-- generated on 2023-11-08 14:34:11 by Eclipse SUMO polyconvert Version v1_18_0+2302-d2b4eb5e0e7
 <configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/polyconvertConfiguration.xsd">
 
     <input>
-        <net-file value="katrinebjerg.net.xml"/>
-        <osm-files value="katrinebjerg.osm"/>
+        <net-file value="katrinebjerg/katrinebjerg.net.xml"/>
+        <osm-files value="katrinebjerg/katrinebjerg.osm"/>
         <type-file value="typemap.xml"/>
     </input>
 
     <output>
-        <output-file value="katrinebjerg.poly.xml"/>
+        <output-file value="katrinebjerg/katrinebjerg.poly.xml"/>
     </output>
 
 </configuration>

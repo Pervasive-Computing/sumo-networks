@@ -1,19 +1,16 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-               xsi:noNamespaceSchemaLocation="../xml-schemas/sumocfg.schema.xsd">
+<configuration>
     <input>
-        <net-file value="katrinebjerg.net.xml" />
-        <route-files value="katrinebjerg.rou.xml" />
-        <!-- <gui-settings-file value="text.settings.xml"/> -->
-        <additional-files value="katrinebjerg.poly.xml" />
+        <net-file value="katrinebjerg.net.xml"/>
+        <route-files value="katrinebjerg.rou.xml"/>
+        <additional-files value="katrinebjerg.poly.xml"/>
     </input>
     <time>
-        <begin value="0" />
-        <step-length value="0.01" />
-        <end value="10000" />
+        <begin value="0"/>
+        <step-length value="0.01"/>
+        <end value="100000"/>
     </time>
     <gui_only>
-        <delay value="80"/>
+        <delay value="1000"/>
         <start value="true"/>
     </gui_only>
 </configuration>
