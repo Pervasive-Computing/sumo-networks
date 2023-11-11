@@ -38,8 +38,9 @@ find_package(argparse REQUIRED)
 find_package(nlohmann_json REQUIRED)
 find_package(pugixml REQUIRED)
 find_package(phmap REQUIRED)
+find_package(tl-expected REQUIRED)
 
-set(external_library_targets fmt::fmt uwebsockets::uwebsockets spdlog::spdlog argparse::argparse nlohmann_json::nlohmann_json pugixml::pugixml phmap)
+set(external_library_targets fmt::fmt uwebsockets::uwebsockets spdlog::spdlog argparse::argparse nlohmann_json::nlohmann_json pugixml::pugixml phmap tl::expected)
 
 add_executable(${PROJECT_NAME} uwebsockets.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE ${external_library_targets})
