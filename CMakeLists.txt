@@ -31,6 +31,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fdiagnostics-color=always")
 
 # Conan is used for dependency management
 find_package(fmt REQUIRED)
+
 # find_package(cxxopts REQUIRED)
 find_package(uwebsockets REQUIRED)
 find_package(spdlog REQUIRED)
@@ -39,8 +40,9 @@ find_package(nlohmann_json REQUIRED)
 find_package(pugixml REQUIRED)
 find_package(phmap REQUIRED)
 find_package(tl-expected REQUIRED)
+find_package(indicators REQUIRED)
 
-set(external_library_targets fmt::fmt uwebsockets::uwebsockets spdlog::spdlog argparse::argparse nlohmann_json::nlohmann_json pugixml::pugixml phmap tl::expected)
+set(external_library_targets fmt::fmt uwebsockets::uwebsockets spdlog::spdlog argparse::argparse nlohmann_json::nlohmann_json pugixml::pugixml phmap tl::expected indicators::indicators)
 
 add_executable(${PROJECT_NAME} uwebsockets.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE ${external_library_targets})
@@ -48,6 +50,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE ${external_library_targets})
 # Link with SUMO's libtraci
 # g++ -o test -std=c++11 -I$SUMO_HOME/src test.cpp -L$SUMO_HOME/bin -ltracicpp
 target_include_directories(${PROJECT_NAME} PRIVATE $ENV{SUMO_HOME}/src) # Equivalent to -I$SUMO_HOME/src
+
 # target_include_directories(${PROJECT_NAME} PRIVATE )
 # target_link_libraries(${PROJECT_NAME} PRIVATE $ENV{SUMO_HOME}/tools/libtraci/_libtraci.so) # Equivalent to -ltracicpp
 target_link_libraries(${PROJECT_NAME} PRIVATE tracicpp)

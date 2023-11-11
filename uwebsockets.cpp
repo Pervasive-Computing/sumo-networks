@@ -27,6 +27,9 @@ using namespace nlohmann::literals; // for ""_json
 #include <spdlog/spdlog.h>
 #include <uWebSockets/App.h>
 #include <tl/expected.hpp>
+#include <indicators/cursor_control.hpp>
+// #include <indicators/progress_bar.hpp>
+#include <indicators/block_progress_bar.hpp>
 
 #include <libsumo/libtraci.h>
 using namespace libtraci;
@@ -358,9 +361,35 @@ auto main(int argc, char** argv) -> int {
 
 		spdlog::info("dt: {}", dt);
 
+		  using namespace indicators;
+
+		// Hide cursor
+		// show_console_cursor(false);
+
+		// Hide cursor
+		show_console_cursor(false);
+
+		BlockProgressBar bar{
+			option::BarWidth{80},
+			option::Start{"["},
+			// option::Fill{"■"},
+			// option::Lead{"■"},
+			// option::Remainder{"-"},
+			option::End{" ]"},
+			// option::PostfixText{""},
+			option::ShowElapsedTime{true},
+			option::ForegroundColor{Color::yellow},
+			option::FontStyles{std::vector<FontStyle>{FontStyle::bold}}
+		};
+
+
 		// TODO: figure out how to subscribe an extract data from the simulation
 		for (int i = 0; i < options.simulation_steps; ++i) {
 			Simulation::step();
+			// TODO: show step/total_steps instead of percent in progress bar
+			const double percent_done = static_cast<double>(i) / options.simulation_steps * 100.0;
+			bar.set_progress(percent_done); // 10% done
+			bar.set_option(option::PostfixText(fmt::format("{}/{}", i, options.simulation_steps)));  
 
 			// TODO: Get (x,y, theta) of all vehicles
 			auto			 vehicles_ids = Vehicle::getIDList();
@@ -373,44 +402,19 @@ auto main(int argc, char** argv) -> int {
 				const int  x = position.x;
 				const int  y = position.y;
 
-				const auto heading = Vehicle::getAngle(id);
+				const double heading = Vehicle::getAngle(id);
 				car.x = x;
 				car.y = y;
 				car.heading = heading;
 				car.alive = true;
-
-				spdlog::info("id: {} x: {} y: {} heading: {}", id, x, y, heading);
-
-				// item.second.x = x;
-				// item.second.y = y;
-				// item.second.heading = heading;
-
-				//   const auto position = Vehicle::getPosition(id);
-				//   const int x = position.x;
-				//   const int y = position.y;
-
-				//   const auto heading = Vehicle::getAngle(id);
-
-				//   spdlog::info("id: {} x: {} y: {} heading: {}", id, x, y, heading);
 			}
-
-			// for (auto& item : cars) {
-
-			// }
-
-			// fmt::println("step: {}", i);
-			if (i % 100 == 0) {
-				// fmt::println("{} vehicles", vehicles_ids.size());
-				// pprint(vehicles_ids);
-			}
-
 			// std::this_thread::sleep_for(10ms);
 		}
 
+		show_console_cursor(true);
+
 		Simulation::close();
 	});
-
-	int counter = 0;
 
 	auto app = uWS::App()
 				   .get("/*",
@@ -466,8 +470,6 @@ auto main(int argc, char** argv) -> int {
 								->end(payload);
 							// res->end(payload);
 							// Set status code
-
-							counter++;
 						})
 
 				   .listen(options.port, [&](us_listen_socket_t* listen_socket) {

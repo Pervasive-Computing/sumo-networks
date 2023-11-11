@@ -10,7 +10,7 @@ nlohmann_json/3.11.2
 pugixml/1.14
 parallel-hashmap/1.37
 tl-expected/1.1.0
-
+indicators/2.3
 
 [generators]
 CMakeToolchain
