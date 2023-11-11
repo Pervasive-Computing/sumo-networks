@@ -63,7 +63,7 @@ check_fail "netconvert"
 
 echo "Creating SUMO routes from OSM file"
 # python "$SUMO_HOME/tools/randomTrips.py" -n "$file_prefix.net.xml" --random-routing-factor 2.0 --insertion-density 100 -e 20000 -L -r "$file_prefix.rou.xml"
-python "$SUMO_HOME/tools/randomTrips.py" -n "$file_prefix.net.xml" -e 20000 -L -r "$file_prefix.rou.xml"
+python "$SUMO_HOME/tools/randomTrips.py" -n "$file_prefix.net.xml" -e 100000 -L -r "$file_prefix.rou.xml"
 check_fail "randomTrips.py"
 
 typemap_filename="typemap.xml"
@@ -89,11 +89,11 @@ cat << EOF > "$file_prefix.sumocfg"
     </input>
     <time>
         <begin value="0"/>
-        <step-length value="0.1"/>
-        <end value="20000"/>
+        <step-length value="0.01"/>
+        <end value="100000"/>
     </time>
     <gui_only>
-        <delay value="0"/>
+        <delay value="80"/>
         <start value="true"/>
     </gui_only>
 </configuration>
