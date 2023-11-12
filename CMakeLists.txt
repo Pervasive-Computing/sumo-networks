@@ -41,8 +41,9 @@ find_package(pugixml REQUIRED)
 find_package(phmap REQUIRED)
 find_package(tl-expected REQUIRED)
 find_package(indicators REQUIRED)
+find_package(ZeroMQ REQUIRED)
 
-set(external_library_targets fmt::fmt uwebsockets::uwebsockets spdlog::spdlog argparse::argparse nlohmann_json::nlohmann_json pugixml::pugixml phmap tl::expected indicators::indicators)
+set(external_library_targets fmt::fmt uwebsockets::uwebsockets spdlog::spdlog argparse::argparse nlohmann_json::nlohmann_json pugixml::pugixml phmap tl::expected indicators::indicators libzmq-static)
 
 add_executable(${PROJECT_NAME} uwebsockets.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE ${external_library_targets})
