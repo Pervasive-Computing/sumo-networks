@@ -47,18 +47,18 @@ using i64 = std::int64_t;
 using f32 = float;
 using f64 = double;
 
-[[nodiscard]] auto walkdir(
-	const std::string& dir, const std::function<bool(const fs::directory_entry&)>& filter =
-								[](const auto& _) { return true; }) -> std::vector<std::string> {
-	std::vector<std::string> files;
-	for (const auto& entry : fs::directory_iterator(dir)) {
-		if (! filter(entry)) {
-			continue;
-		}
-		files.push_back(entry.path().string());
-	}
-	return files;
-}
+// [[nodiscard]] auto walkdir(
+// 	const std::string& dir, const std::function<bool(const fs::directory_entry&)>& filter =
+// 								[](const auto&) { return true; }) -> std::vector<std::string> {
+// 	std::vector<std::string> files;
+// 	for (const auto& entry : fs::directory_iterator(dir)) {
+// 		if (! filter(entry)) {
+// 			continue;
+// 		}
+// 		files.push_back(entry.path().string());
+// 	}
+// 	return files;
+// }
 
 // <configuration>
 //     <input>
@@ -149,7 +149,7 @@ struct ProgramOptions {
 	u16		 sumo_port;
 	i32		 simulation_steps;
 	fs::path sumocfg_path;
-	bool	 gui = true;
+	// bool	 gui = true;
 	bool	 verbose = false;
 };
 
@@ -163,7 +163,7 @@ auto pprint(const ProgramOptions& options) -> void {
 				 pformat(options.simulation_steps));
 	fmt::println("{}{}.sumocfg_path{} = {},", indent, markup::bold, reset,
 				 pformat(options.sumocfg_path));
-	fmt::println("{}{}.gui{} = {},", indent, markup::bold, reset, pformat(options.gui));
+	// fmt::println("{}{}.gui{} = {},", indent, markup::bold, reset, pformat(options.gui));
 	fmt::println("{}{}.verbose{} = {},", indent, markup::bold, reset, pformat(options.verbose));
 	fmt::println("}};");
 }
@@ -193,8 +193,8 @@ auto create_argv_parser() -> argparse::ArgumentParser {
 			std::pow(2, 16) - 1));
 
 
-	argv_parser.add_argument("--gui").default_value(false).implicit_value(true).nargs(0).help(
-		"Use `sumo-gui` instead of `sumo` to run the simulation");
+	// argv_parser.add_argument("--gui").default_value(false).implicit_value(true).nargs(0).help(
+	// 	"Use `sumo-gui` instead of `sumo` to run the simulation");
 
 	argv_parser.add_argument("--simulation-steps")
 		.default_value(10000)
@@ -216,12 +216,12 @@ auto parse_args(argparse::ArgumentParser argv_parser, int argc, char** argv)
 
 	// If sumocfg is not set in the command line, search for all files in
 	// cwd/**/*.sumocfg and print them
-	const u16 port = argv_parser.get<int>("port");
+	const int port = argv_parser.get<int>("port");
 	if (port < 0 || port > std::pow(2, 16) - 1) {
 		return tl::unexpected(fmt::format("--port must be between 0 and {}", std::pow(2, 16) - 1));
 	}
 
-	const u16 sumo_port = argv_parser.get<int>("sumo-port");
+	const int sumo_port = argv_parser.get<int>("sumo-port");
 	if (sumo_port < 0 || sumo_port > std::pow(2, 16) - 1) {
 		return tl::unexpected(
 			fmt::format("--sumo-port must be between 0 and {}", std::pow(2, 16) - 1));
@@ -251,16 +251,15 @@ auto parse_args(argparse::ArgumentParser argv_parser, int argc, char** argv)
 	}
 
 	return ProgramOptions {
-		.port = port,
-		.sumo_port = sumo_port,
+		.port = static_cast<u16>(port),
+		.sumo_port = static_cast<u16>(sumo_port),
 		.simulation_steps = simulation_steps,
 		.sumocfg_path = sumocfg_path,
-		.gui = argv_parser.get<bool>("gui"),
+		// .gui = argv_parser.get<bool>("gui"),
 		.verbose = argv_parser.get<bool>("verbose"),
 	};
 }
 
-struct UserData { };
 
 auto main(int argc, char** argv) -> int {
 	const auto argv_parser = create_argv_parser();
@@ -344,28 +343,13 @@ auto main(int argc, char** argv) -> int {
 	spdlog::info("Found {} vehicles in {}", cars.size(), sumocfg.route_files.string());
 
 	auto sumo_simulation_thread = std::thread([&]() -> void {
-		// std::vector<std::string> cmd = {
-		// 	argv_parser.get<bool>("gui") ? "sumo-gui" : "sumo",
-		// 	"--configuration-file",
-		// 	sumocfg_path.string(),
-		// };
-
-		// const auto simulation_start_result = Simulation::start(cmd, 19000);
-		// spdlog::info(".first: {} .second: {}", simulation_start_result.first,
-		// simulation_start_result.second);
-
 		const int num_retries = 100;
-		// const int sumo_sim_port = 10000;
 		Simulation::init(options.sumo_port, num_retries, "localhost");
 		const double dt = Simulation::getDeltaT();
 
 		spdlog::info("dt: {}", dt);
 
 		using namespace indicators;
-
-		// Hide cursor
-		// show_console_cursor(false);
-
 		// Hide cursor
 		show_console_cursor(false);
 
@@ -383,12 +367,12 @@ auto main(int argc, char** argv) -> int {
 		// TODO: figure out how to subscribe an extract data from the simulation
 		for (int i = 0; i < options.simulation_steps; ++i) {
 			Simulation::step();
-			// TODO: show step/total_steps instead of percent in progress bar
+			// Show step/total_steps instead of percent in progress bar
 			const double percent_done = static_cast<double>(i) / options.simulation_steps * 100.0;
 			bar.set_progress(percent_done); // 10% done
 			bar.set_option(option::PostfixText(fmt::format("{}/{}", i, options.simulation_steps)));
 
-			// TODO: Get (x,y, theta) of all vehicles
+			// Get (x,y, theta) of all vehicles
 			auto			 vehicles_ids = Vehicle::getIDList();
 			std::scoped_lock lock(cars_mutex);
 
@@ -405,7 +389,6 @@ auto main(int argc, char** argv) -> int {
 				car.heading = heading;
 				car.alive = true;
 			}
-			// std::this_thread::sleep_for(10ms);
 		}
 
 		show_console_cursor(true);
@@ -435,8 +418,8 @@ auto main(int argc, char** argv) -> int {
 						/* Handlers */
 						.upgrade = nullptr,
 						.open =
-							[&route](auto* ws) {
-								PerSocketData* data = (PerSocketData*) ws->getUserData();
+							[&route](auto* /*ws*/) {
+								// PerSocketData* data = (PerSocketData*) ws->getUserData();
 								spdlog::info("Client connected on route: {}", route);
 							},
 						.message =
@@ -470,22 +453,19 @@ auto main(int argc, char** argv) -> int {
 							},
 						.drain =
 							[](auto* /*ws*/) {
-								/* Check ws->getBufferedAmount() here */
 								spdlog::info("Drain");
 							},
 						.ping =
 							[](auto* /*ws*/, std::string_view) {
-								/* Not implemented yet */
 								spdlog::info("Ping");
 							},
 						.pong =
 							[](auto* /*ws*/, std::string_view) {
-								/* Not implemented yet */
 								spdlog::info("Pong");
 							},
 						.close =
-							[](auto* ws, int code, std::string_view message) {
-								PerSocketData* data = (PerSocketData*) ws->getUserData();
+							[](auto* /*ws*/, int code, std::string_view message) {
+								// PerSocketData* data = (PerSocketData*) ws->getUserData();
 								//							   data->closed = true;
 								spdlog::info("Client disconnected with code: {}, message: {}", code,
 											 message);
