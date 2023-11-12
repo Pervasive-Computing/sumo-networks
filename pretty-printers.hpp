@@ -2,35 +2,84 @@
 
 #include <string>
 #include <vector>
+#include <filesystem>
+#include <type_traits>
+
 #include <fmt/core.h>
+#include <fmt/color.h>
 
 #include "ansi-escape-codes.hpp"
 
-auto pprint_string(const std::string& s) -> void {
-    fmt::print("{}\"{}\"{}\n", escape_codes::color::fg::green, s, escape_codes::reset);
-}
-
-auto pprint_bool(bool b) -> void {
-    fmt::print("{}{}{}\n", b ? escape_codes::color::fg::green : escape_codes::color::fg::red, b ? "true" : "false", escape_codes::reset);
-}
-
-auto pformat_string(const std::string& s) -> std::string {
+[[nodiscard]]
+auto pformat(const std::string& s) -> std::string {
     return fmt::format("{}\"{}\"{}", escape_codes::color::fg::green, s, escape_codes::reset);
 }
 
-
-auto pformat(const std::string& s) -> std::string {
-    return pformat_string(s);
+[[nodiscard]]
+auto pformat(const char* s) -> std::string {
+    return pformat(std::string(s));
 }
 
-
-// template <typename T>
-// auto pprint(T&& t) -> void {}
-
-// template <>
 auto pprint(const std::string& s) -> void {
-    pprint_string(s);
+    fmt::println("{}", pformat(s));
 }
+
+auto pprint(const char* s) -> void {
+    pprint(std::string(s));
+}
+
+template <typename T, std::enable_if_t<std::is_floating_point_v<T>, bool> = true>
+[[nodiscard]]
+auto pformat(const T f) -> std::string {
+    return fmt::format(fg(fmt::color::orange), "{}", f);
+}
+
+template <typename T, std::enable_if_t<std::is_floating_point_v<T>, bool> = true>
+auto pprint(const T f) -> void {
+    fmt::println("{}", pformat(f));
+}
+
+template <typename T, std::enable_if_t<std::is_integral_v<T>, bool> = true>
+[[nodiscard]]
+auto pformat(const T i) -> std::string {
+    return fmt::format(fg(fmt::color::blue), "{}", i);
+}
+
+template <typename T, std::enable_if_t<std::is_integral_v<T>, bool> = true>
+auto pprint(const T i) -> void {
+    fmt::println("{}", pformat(i));
+}
+
+[[nodiscard]]
+auto pformat(const bool b) -> std::string {
+    return fmt::format(b ? fg(fmt::color::green) : fg(fmt::color::red) ,"{}", b);
+}
+
+auto pprint(const bool b) -> void {
+    fmt::println("{}", pformat(b));
+}
+
+[[nodiscard]] 
+auto pformat(const std::filesystem::path& p) -> std::string {
+    if (! std::filesystem::exists(p)) {
+        return fmt::format(fmt::emphasis::bold | fg(fmt::color::red), "{}", p.string());
+    }
+
+    if (std::filesystem::is_directory(p)) {
+        return fmt::format(fmt::emphasis::bold | fg(fmt::color::blue), "{} {}", p.string(), "");
+    }
+    else if (std::filesystem::is_regular_file(p)) {
+        return fmt::format(fmt::emphasis::bold | fg(fmt::color::green), "{}", p.string());
+    }
+    else {
+        return fmt::format(fmt::emphasis::bold | fg(fmt::color::red), "TODO: not implemented yet for {}\n", p.string());
+    }
+}
+
+auto pprint(const std::filesystem::path& p) -> void {
+    fmt::println("{}", pformat(p));
+}
+
 
 template <typename T>
 auto pprint(const std::vector<T>& v, const int indent_by = 4, const int depth = 0) -> void {

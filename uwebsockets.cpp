@@ -4,6 +4,9 @@ using namespace std::chrono_literals;
 #include <filesystem>
 #include <queue>
 namespace fs = std::filesystem;
+#include "ansi-escape-codes.hpp"
+#include "debug-macro.hpp"
+#include "pretty-printers.hpp"
 #include <functional>
 #include <iostream>
 #include <mutex>
@@ -11,9 +14,6 @@ namespace fs = std::filesystem;
 #include <string>
 #include <thread>
 #include <vector>
-#include "ansi-escape-codes.hpp"
-#include "debug-macro.hpp"
-#include "pretty-printers.hpp"
 
 // 3rd party libraries
 #include <argparse/argparse.hpp>
@@ -22,12 +22,12 @@ namespace fs = std::filesystem;
 // for convenience
 using json = nlohmann::json;
 using namespace nlohmann::literals; // for ""_json
+#include <indicators/cursor_control.hpp>
 #include <parallel_hashmap/phmap.h>
 #include <pugixml.hpp>
 #include <spdlog/spdlog.h>
-#include <uWebSockets/App.h>
 #include <tl/expected.hpp>
-#include <indicators/cursor_control.hpp>
+#include <uWebSockets/App.h>
 // #include <indicators/progress_bar.hpp>
 #include <indicators/block_progress_bar.hpp>
 
@@ -47,14 +47,7 @@ using i64 = std::int64_t;
 using f32 = float;
 using f64 = double;
 
-// template <typename T>
-// using Vec = std::vector<T>;
-// using String = std::string;
-
-// template <typename T>
-// using Option = std::optional<T>;
-
-auto walkdir(
+[[nodiscard]] auto walkdir(
 	const std::string& dir, const std::function<bool(const fs::directory_entry&)>& filter =
 								[](const auto& _) { return true; }) -> std::vector<std::string> {
 	std::vector<std::string> files;
@@ -95,8 +88,8 @@ auto parse_sumocfg(const fs::path& sumocfg_path) -> tl::expected<SumoConfigurati
 
 	pugi::xml_parse_result result = sumocfg_xml_doc.load_file(sumocfg_path.string().c_str());
 	if (! result) {
-		return tl::unexpected(fmt::format("Failed to parse SUMO configuration file: {}",
-										  result.description()));
+		return tl::unexpected(
+			fmt::format("Failed to parse SUMO configuration file: {}", result.description()));
 	}
 
 	const auto net_file = sumocfg_xml_doc.child("configuration")
@@ -105,10 +98,10 @@ auto parse_sumocfg(const fs::path& sumocfg_path) -> tl::expected<SumoConfigurati
 							  .attribute("value")
 							  .as_string();
 	const auto route_files = sumocfg_xml_doc.child("configuration")
-									.child("input")
-									.child("route-files")
-									.attribute("value")
-									.as_string();
+								 .child("input")
+								 .child("route-files")
+								 .attribute("value")
+								 .as_string();
 	const auto additional_files = sumocfg_xml_doc.child("configuration")
 									  .child("input")
 									  .child("additional-files")
@@ -116,8 +109,8 @@ auto parse_sumocfg(const fs::path& sumocfg_path) -> tl::expected<SumoConfigurati
 									  .as_string();
 
 	return SumoConfiguration {
-		.net_file		 = net_file,
-		.route_files	 = route_files,
+		.net_file = net_file,
+		.route_files = route_files,
 		.additional_files = additional_files,
 	};
 }
@@ -152,34 +145,34 @@ auto get_sumo_home_directory_path() -> tl::expected<fs::path, get_sumo_home_dire
 }
 
 struct ProgramOptions {
-	u16 port;
-	u16 sumo_port;
-	i32  simulation_steps;
+	u16		 port;
+	u16		 sumo_port;
+	i32		 simulation_steps;
 	fs::path sumocfg_path;
-	bool gui = true;
-	bool verbose = false;
+	bool	 gui = true;
+	bool	 verbose = false;
 };
 
 auto pprint(const ProgramOptions& options) -> void {
 	using namespace escape_codes;
 	fmt::println("({}ProgramOptions{}) {{", color::fg::cyan, reset);
 	const auto indent = std::string(4, ' ');
-	fmt::println("{}{}.port{} = {}{}{},", indent, markup::bold, reset, color::fg::blue, options.port, reset);
-	fmt::println("{}{}.sumo_port{} = {}{}{},", indent, markup::bold, reset, color::fg::blue, options.sumo_port, reset);
-	fmt::println("{}{}.simulation_steps{} = {}{}{},", indent, markup::bold, reset, color::fg::blue,
-				 options.simulation_steps, reset);
-	fmt::println("{}{}.sumocfg_path{} = {}{}{},", indent, markup::bold, reset, markup::italic,
-				 options.sumocfg_path.string(), reset);
-	fmt::println("{}{}.gui{} = {}{}{},", indent, markup::bold, reset, options.gui ? color::fg::green : color::fg::red, options.gui, reset);
-	fmt::println("{}{}.verbose{} = {}{}{},", indent, markup::bold, reset, options.verbose ? color::fg::green : color::fg::red,
-				 options.verbose, reset);
+	fmt::println("{}{}.port{} = {},", indent, markup::bold, reset, pformat(options.port));
+	fmt::println("{}{}.sumo_port{} = {},", indent, markup::bold, reset, pformat(options.sumo_port));
+	fmt::println("{}{}.simulation_steps{} = {},", indent, markup::bold, reset,
+				 pformat(options.simulation_steps));
+	fmt::println("{}{}.sumocfg_path{} = {},", indent, markup::bold, reset,
+				 pformat(options.sumocfg_path));
+	fmt::println("{}{}.gui{} = {},", indent, markup::bold, reset, pformat(options.gui));
+	fmt::println("{}{}.verbose{} = {},", indent, markup::bold, reset, pformat(options.verbose));
 	fmt::println("}};");
 }
 
 auto create_argv_parser() -> argparse::ArgumentParser {
 	auto argv_parser = argparse::ArgumentParser(__FILE__, "0.1.0");
 
-	argv_parser.add_argument("-V", "--verbose")
+	argv_parser
+		.add_argument("-V", "--verbose")
 		// .action([&](const auto&) { ++verbosity; })
 		// .append()
 		.default_value(false)
@@ -192,13 +185,13 @@ auto create_argv_parser() -> argparse::ArgumentParser {
 		.help(fmt::format("Port used for the websocket server, constraints: 0 < port <= {}",
 						  std::pow(2, 16) - 1));
 
-						  argv_parser.add_argument("--sumo-port")
+	argv_parser.add_argument("--sumo-port")
 		.default_value(12001)
 		.scan<'i', int>()
-		.help(fmt::format("Port used to connect to a running sumo simulation, constraints: 0 < port <= {}",
-						  std::pow(2, 16) - 1));
+		.help(fmt::format(
+			"Port used to connect to a running sumo simulation, constraints: 0 < port <= {}",
+			std::pow(2, 16) - 1));
 
-						  
 
 	argv_parser.add_argument("--gui").default_value(false).implicit_value(true).nargs(0).help(
 		"Use `sumo-gui` instead of `sumo` to run the simulation");
@@ -213,7 +206,8 @@ auto create_argv_parser() -> argparse::ArgumentParser {
 	return argv_parser;
 }
 
-auto parse_args(argparse::ArgumentParser argv_parser, int argc, char** argv) -> tl::expected<ProgramOptions, std::string> {
+auto parse_args(argparse::ArgumentParser argv_parser, int argc, char** argv)
+	-> tl::expected<ProgramOptions, std::string> {
 	try {
 		argv_parser.parse_args(argc, argv);
 	} catch (const std::exception& err) {
@@ -244,26 +238,29 @@ auto parse_args(argparse::ArgumentParser argv_parser, int argc, char** argv) -> 
 
 	// TODO: maybe convert to absolute path
 	const std::string sumocfg = argv_parser.get<std::string>("sumocfg");
-	const fs::path sumocfg_path = sumocfg;
+	const fs::path	  sumocfg_path = sumocfg;
 	if (! fs::exists(sumocfg_path)) {
-		return tl::unexpected(fmt::format("SUMO configuration file not found: {}",
-										  sumocfg_path.filename().string()));
+		return tl::unexpected(
+			fmt::format("SUMO configuration file not found: {}", sumocfg_path.filename().string()));
 	}
 
 	if (! (sumocfg_path.has_extension()) || sumocfg_path.extension().string() != ".sumocfg") {
-		return tl::unexpected(fmt::format("SUMO configuration file must have extension .sumocfg, not {}",
-										  sumocfg_path.extension().string()));
+		return tl::unexpected(
+			fmt::format("SUMO configuration file must have extension .sumocfg, not {}",
+						sumocfg_path.extension().string()));
 	}
 
 	return ProgramOptions {
-		.port			   = port,
-		.sumo_port		   = sumo_port,
-		.simulation_steps  = simulation_steps,
-		.sumocfg_path		   = sumocfg_path,
-		.gui			   = argv_parser.get<bool>("gui"),
-		.verbose		   = argv_parser.get<bool>("verbose"),
+		.port = port,
+		.sumo_port = sumo_port,
+		.simulation_steps = simulation_steps,
+		.sumocfg_path = sumocfg_path,
+		.gui = argv_parser.get<bool>("gui"),
+		.verbose = argv_parser.get<bool>("verbose"),
 	};
 }
+
+struct UserData { };
 
 auto main(int argc, char** argv) -> int {
 	const auto argv_parser = create_argv_parser();
@@ -291,8 +288,11 @@ auto main(int argc, char** argv) -> int {
 			const auto& err = result.error();
 			if (err == get_sumo_home_directory_path_error::environment_variable_not_set) {
 				spdlog::error("Environment variable SUMO_HOME is not set");
-			} else if (err == get_sumo_home_directory_path_error::environment_variable_not_a_directory) {
-				spdlog::error("Environment variable $SUMO_HOME ({}) does not point to a valid directory", std::getenv("SUMO_HOME"));
+			} else if (err ==
+					   get_sumo_home_directory_path_error::environment_variable_not_a_directory) {
+				spdlog::error(
+					"Environment variable $SUMO_HOME ({}) does not point to a valid directory",
+					std::getenv("SUMO_HOME"));
 			}
 			std::exit(2);
 		}
@@ -319,11 +319,11 @@ auto main(int argc, char** argv) -> int {
 
 	// Parse the SUMO configuration file
 	const auto sumocfg = parse_sumocfg(options.sumocfg_path)
-							.map_error([](const auto& err) {
-								spdlog::error("{}", err);
-								std::exit(1);
-							})
-							.value();
+							 .map_error([](const auto& err) {
+								 spdlog::error("{}", err);
+								 std::exit(1);
+							 })
+							 .value();
 
 	pugi::xml_document route_files_xml_doc;
 
@@ -361,7 +361,7 @@ auto main(int argc, char** argv) -> int {
 
 		spdlog::info("dt: {}", dt);
 
-		  using namespace indicators;
+		using namespace indicators;
 
 		// Hide cursor
 		// show_console_cursor(false);
@@ -369,18 +369,15 @@ auto main(int argc, char** argv) -> int {
 		// Hide cursor
 		show_console_cursor(false);
 
-		BlockProgressBar bar{
-			option::BarWidth{80},
-			option::Start{"["},
-			// option::Fill{"■"},
-			// option::Lead{"■"},
-			// option::Remainder{"-"},
-			option::End{" ]"},
-			// option::PostfixText{""},
-			option::ShowElapsedTime{true},
-			option::ForegroundColor{Color::yellow},
-			option::FontStyles{std::vector<FontStyle>{FontStyle::bold}}
-		};
+		BlockProgressBar bar {option::BarWidth {80}, option::Start {"["},
+							  // option::Fill{"■"},
+							  // option::Lead{"■"},
+							  // option::Remainder{"-"},
+							  option::End {" ]"},
+							  // option::PostfixText{""},
+							  option::ShowElapsedTime {true},
+							  option::ForegroundColor {Color::yellow},
+							  option::FontStyles {std::vector<FontStyle> {FontStyle::bold}}};
 
 
 		// TODO: figure out how to subscribe an extract data from the simulation
@@ -389,7 +386,7 @@ auto main(int argc, char** argv) -> int {
 			// TODO: show step/total_steps instead of percent in progress bar
 			const double percent_done = static_cast<double>(i) / options.simulation_steps * 100.0;
 			bar.set_progress(percent_done); // 10% done
-			bar.set_option(option::PostfixText(fmt::format("{}/{}", i, options.simulation_steps)));  
+			bar.set_option(option::PostfixText(fmt::format("{}/{}", i, options.simulation_steps)));
 
 			// TODO: Get (x,y, theta) of all vehicles
 			auto			 vehicles_ids = Vehicle::getIDList();
@@ -416,69 +413,88 @@ auto main(int argc, char** argv) -> int {
 		Simulation::close();
 	});
 
-	auto app = uWS::App()
-				   .get("/*",
-						[](auto* res, auto* req) {
-							res->writeHeader("Content-Type", "text/plain");
-							//  res->
-							res->end("Hello World!");
-							fmt::print("Hello World!\n");
-						})
-				   .get("/cars",
-						[&](auto* res, auto* req) {
-							// Take all cars and convert them to json
-							// The structure is
-							// {
-							//  "vehicle_id_1": {
-							//    "x": 0,
-							//    "y": 0,
-							//    "heading": 0
-							//  },
-							//  "vehicle_id_2": {
-							//    "x": 0,
-							//    "y": 0,
-							//    "heading": 0
-							//  },
-							//  ...
-							// }
+	struct PerSocketData {
+		//		bool closed = false;
+		// Use std::atomic to prevent data races
+		//		std::atomic<bool> closed = false;
+		/* Fill with user data */
+	};
 
-							std::scoped_lock lock(cars_mutex);
-							json			 j;
-							for (const auto& item : cars) {
+	const std::string route = "/cars";
+	auto			  app =
+		uWS::App()
+			.ws<PerSocketData>(
+				route, {/* Settings */
+						.compression = uWS::SHARED_COMPRESSOR,
+						.maxPayloadLength = 16 * 1024 * 1024,
+						.idleTimeout = 16,
+						.maxBackpressure = 1 * 1024 * 1024,
+						.closeOnBackpressureLimit = false,
+						.resetIdleTimeoutOnSend = false,
+						.sendPingsAutomatically = true,
+						/* Handlers */
+						.upgrade = nullptr,
+						.open =
+							[&route](auto* ws) {
+								PerSocketData* data = (PerSocketData*) ws->getUserData();
+								spdlog::info("Client connected on route: {}", route);
+							},
+						.message =
+							[&](auto* ws, std::string_view message, uWS::OpCode opCode) {
+								spdlog::info("Received message: {}", message);
+								// Echo the message back to the client
+								std::scoped_lock lock(cars_mutex);
+								json			 j;
 
-								const Car& car = item.second;
-								if (! car.alive) {
-									continue;
+								for (const auto& item : cars) {
+
+									const Car& car = item.second;
+									if (! car.alive) {
+										continue;
+									}
+									const std::string& vehicle_id = item.first;
+									json			   car_as_json = {
+										  {"x",		item.second.x		 },
+										  {"y",		item.second.y		 },
+										  {"heading", item.second.heading},
+									  };
+									j[vehicle_id] = car_as_json;
 								}
-								const std::string& vehicle_id = item.first;
-								json			   car_as_json = {
-									  {"x",		item.second.x		 },
-									  {"y",		item.second.y		 },
-									  {"heading", item.second.heading},
-								  };
-								j[vehicle_id] = car_as_json;
-							}
-
-							// auto car = Car{0, 0};
-							// json j = {
-							//     {"x", car.x},
-							//     {"y", car.y},
-							//     {"heading", car.heading},
-							// };
-							std::string payload = j.dump();
-							res->writeHeader("Content-Type", "application/json; charset=utf-8")
-								->end(payload);
-							// res->end(payload);
-							// Set status code
-						})
-
-				   .listen(options.port, [&](us_listen_socket_t* listen_socket) {
-					   if (listen_socket) {
-						   spdlog::info("Listening for connections on port {}\n", options.port);
-					   } else {
-						   spdlog::error("Failed to listen on port {}", options.port);
-					   }
-				   });
+								// writeHeader("Content-Type", "application/json; charset=utf-8")
+								const auto payload = j.dump();
+								// Serialize to CBOR
+								const std::vector<u8> v = json::to_cbor(j);
+								// Convert to std::string
+								const std::string payload2(v.begin(), v.end());
+								ws->send(payload2, opCode, true);
+							},
+						.drain =
+							[](auto* /*ws*/) {
+								/* Check ws->getBufferedAmount() here */
+								spdlog::info("Drain");
+							},
+						.ping =
+							[](auto* /*ws*/, std::string_view) {
+								/* Not implemented yet */
+								spdlog::info("Ping");
+							},
+						.pong =
+							[](auto* /*ws*/, std::string_view) {
+								/* Not implemented yet */
+								spdlog::info("Pong");
+							},
+						.close =
+							[](auto* ws, int code, std::string_view message) {
+								PerSocketData* data = (PerSocketData*) ws->getUserData();
+								//							   data->closed = true;
+								spdlog::info("Client disconnected with code: {}, message: {}", code,
+											 message);
+							}})
+			.listen(options.port, [&](auto* listen_socket) {
+				if (listen_socket) {
+					std::cout << "Listening on port " << options.port << std::endl;
+				}
+			});
 
 	app.run();
 

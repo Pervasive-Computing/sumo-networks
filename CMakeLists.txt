@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.27.5 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.23 FATAL_ERROR)
 project(sumo-network-sim VERSION 0.1.0 LANGUAGES CXX) # ${PROJECT_NAME}
 
 # Set default build type to release
@@ -55,3 +55,6 @@ target_include_directories(${PROJECT_NAME} PRIVATE $ENV{SUMO_HOME}/src) # Equiva
 # target_link_libraries(${PROJECT_NAME} PRIVATE $ENV{SUMO_HOME}/tools/libtraci/_libtraci.so) # Equivalent to -ltracicpp
 target_link_libraries(${PROJECT_NAME} PRIVATE tracicpp)
 target_link_directories(${PROJECT_NAME} PRIVATE $ENV{SUMO_HOME}/bin) # Equivalent to -L$SUMO_HOME/bin
+
+
+target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wpedantic)
