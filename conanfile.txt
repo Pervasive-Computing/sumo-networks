@@ -11,7 +11,8 @@ pugixml/1.14
 parallel-hashmap/1.37
 tl-expected/1.1.0
 indicators/2.3
-zeromq/4.3.5
+# zeromq/4.3.5
+cppzmq/4.10.0
 
 [generators]
 CMakeToolchain

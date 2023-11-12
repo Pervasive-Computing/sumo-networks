@@ -27,9 +27,11 @@ using namespace nlohmann::literals; // for ""_json
 #include <pugixml.hpp>
 #include <spdlog/spdlog.h>
 #include <tl/expected.hpp>
-#include <uWebSockets/App.h>
+// #include <uWebSockets/App.h>
 // #include <indicators/progress_bar.hpp>
 #include <indicators/block_progress_bar.hpp>
+
+#include <zmq.hpp>
 
 #include <libsumo/libtraci.h>
 using namespace libtraci;
@@ -150,7 +152,7 @@ struct ProgramOptions {
 	i32		 simulation_steps;
 	fs::path sumocfg_path;
 	// bool	 gui = true;
-	bool	 verbose = false;
+	bool verbose = false;
 };
 
 auto pprint(const ProgramOptions& options) -> void {
@@ -340,145 +342,98 @@ auto main(int argc, char** argv) -> int {
 		const std::string vehicle_id = vehicle.attribute("id").as_string();
 		cars[vehicle_id] = Car {};
 	}
+
+
+	zmq::context_t	  zmq_ctx;
+	zmq::socket_t	  sock(zmq_ctx, zmq::socket_type::pub);
+	const std::string addr = fmt::format("tcp://*:{}", options.port);
+	sock.bind(addr);
+	const std::string_view m = "Hello, world";
+	sock.send(zmq::buffer(m));
+	// sock.send(zmq::buffer(m), zmq::send_flags::dontwait);
+
+	// // Echo the message back to the client
+	// 		std::scoped_lock lock(cars_mutex);
+	// 		json			 j;
+
+	// 		for (const auto& item : cars) {
+
+	// 			const Car& car = item.second;
+	// 			if (! car.alive) {
+	// 				continue;
+	// 			}
+	// 			const std::string& vehicle_id = item.first;
+	// 			json			   car_as_json = {
+	// 				  {"x",		item.second.x		 },
+	// 				  {"y",		item.second.y		 },
+	// 				  {"heading", item.second.heading},
+	// 			  };
+	// 			j[vehicle_id] = car_as_json;
+	// 		}
+	// 		// writeHeader("Content-Type", "application/json; charset=utf-8")
+	// 		const auto payload = j.dump();
+	// 		// Serialize to CBOR
+	// 		const std::vector<u8> v = json::to_cbor(j);
+	// 		// Convert to std::string
+	// 		const std::string payload2(v.begin(), v.end());
+	// 		ws->send(payload2, opCode, true);
+
 	spdlog::info("Found {} vehicles in {}", cars.size(), sumocfg.route_files.string());
-
-	auto sumo_simulation_thread = std::thread([&]() -> void {
-		const int num_retries = 100;
-		Simulation::init(options.sumo_port, num_retries, "localhost");
-		const double dt = Simulation::getDeltaT();
-
-		spdlog::info("dt: {}", dt);
-
-		using namespace indicators;
-		// Hide cursor
-		show_console_cursor(false);
-
-		BlockProgressBar bar {option::BarWidth {80}, option::Start {"["},
-							  // option::Fill{"■"},
-							  // option::Lead{"■"},
-							  // option::Remainder{"-"},
-							  option::End {" ]"},
-							  // option::PostfixText{""},
-							  option::ShowElapsedTime {true},
-							  option::ForegroundColor {Color::yellow},
-							  option::FontStyles {std::vector<FontStyle> {FontStyle::bold}}};
+	const int num_retries = 100;
+	Simulation::init(options.sumo_port, num_retries, "localhost");
+	const double dt = Simulation::getDeltaT();
 
 
-		// TODO: figure out how to subscribe an extract data from the simulation
-		for (int i = 0; i < options.simulation_steps; ++i) {
-			Simulation::step();
-			// Show step/total_steps instead of percent in progress bar
-			const double percent_done = static_cast<double>(i) / options.simulation_steps * 100.0;
-			bar.set_progress(percent_done); // 10% done
-			bar.set_option(option::PostfixText(fmt::format("{}/{}", i, options.simulation_steps)));
+	spdlog::info("dt: {}", dt);
 
-			// Get (x,y, theta) of all vehicles
-			auto			 vehicles_ids = Vehicle::getIDList();
-			std::scoped_lock lock(cars_mutex);
+	// Hide cursor
+	indicators::show_console_cursor(false);
 
-			for (const auto& id : vehicles_ids) {
-				auto& car = cars[id];
-
-				const auto position = Vehicle::getPosition(id);
-				const int  x = position.x;
-				const int  y = position.y;
-
-				const double heading = Vehicle::getAngle(id);
-				car.x = x;
-				car.y = y;
-				car.heading = heading;
-				car.alive = true;
-			}
+	auto bar = indicators::BlockProgressBar {
+		indicators::option::BarWidth {80}, indicators::option::Start {"["},
+		// indicators::option::Fill{"■"},
+		// indicators::option::Lead{"■"},
+		// indicators::option::Remainder{"-"},
+		indicators::option::End {" ]"},
+		// indicators::option::PostfixText{""},
+		indicators::option::ShowElapsedTime {true},
+		indicators::option::ForegroundColor {indicators::Color::yellow},
+		indicators::option::FontStyles {
+			std::vector<indicators::FontStyle> {indicators::FontStyle::bold}
 		}
-
-		show_console_cursor(true);
-
-		Simulation::close();
-	});
-
-	struct PerSocketData {
-		//		bool closed = false;
-		// Use std::atomic to prevent data races
-		//		std::atomic<bool> closed = false;
-		/* Fill with user data */
 	};
 
-	const std::string route = "/cars";
-	auto			  app =
-		uWS::App()
-			.ws<PerSocketData>(
-				route, {/* Settings */
-						.compression = uWS::SHARED_COMPRESSOR,
-						.maxPayloadLength = 16 * 1024 * 1024,
-						.idleTimeout = 16,
-						.maxBackpressure = 1 * 1024 * 1024,
-						.closeOnBackpressureLimit = false,
-						.resetIdleTimeoutOnSend = false,
-						.sendPingsAutomatically = true,
-						/* Handlers */
-						.upgrade = nullptr,
-						.open =
-							[&route](auto* /*ws*/) {
-								// PerSocketData* data = (PerSocketData*) ws->getUserData();
-								spdlog::info("Client connected on route: {}", route);
-							},
-						.message =
-							[&](auto* ws, std::string_view message, uWS::OpCode opCode) {
-								spdlog::info("Received message: {}", message);
-								// Echo the message back to the client
-								std::scoped_lock lock(cars_mutex);
-								json			 j;
+	// TODO: figure out how to subscribe an extract data from the simulation
+	for (int i = 0; i < options.simulation_steps; ++i) {
+		Simulation::step();
+		// Show step/total_steps instead of percent in progress bar
+		const double percent_done = static_cast<double>(i) / options.simulation_steps * 100.0;
+		bar.set_progress(percent_done); // 10% done
+		bar.set_option(
+			indicators::option::PostfixText(fmt::format("{}/{}", i, options.simulation_steps)));
 
-								for (const auto& item : cars) {
+		// Get (x,y, theta) of all vehicles
+		auto			 vehicles_ids = Vehicle::getIDList();
+		std::scoped_lock lock(cars_mutex);
 
-									const Car& car = item.second;
-									if (! car.alive) {
-										continue;
-									}
-									const std::string& vehicle_id = item.first;
-									json			   car_as_json = {
-										  {"x",		item.second.x		 },
-										  {"y",		item.second.y		 },
-										  {"heading", item.second.heading},
-									  };
-									j[vehicle_id] = car_as_json;
-								}
-								// writeHeader("Content-Type", "application/json; charset=utf-8")
-								const auto payload = j.dump();
-								// Serialize to CBOR
-								const std::vector<u8> v = json::to_cbor(j);
-								// Convert to std::string
-								const std::string payload2(v.begin(), v.end());
-								ws->send(payload2, opCode, true);
-							},
-						.drain =
-							[](auto* /*ws*/) {
-								spdlog::info("Drain");
-							},
-						.ping =
-							[](auto* /*ws*/, std::string_view) {
-								spdlog::info("Ping");
-							},
-						.pong =
-							[](auto* /*ws*/, std::string_view) {
-								spdlog::info("Pong");
-							},
-						.close =
-							[](auto* /*ws*/, int code, std::string_view message) {
-								// PerSocketData* data = (PerSocketData*) ws->getUserData();
-								//							   data->closed = true;
-								spdlog::info("Client disconnected with code: {}, message: {}", code,
-											 message);
-							}})
-			.listen(options.port, [&](auto* listen_socket) {
-				if (listen_socket) {
-					std::cout << "Listening on port " << options.port << std::endl;
-				}
-			});
+		for (const auto& id : vehicles_ids) {
+			auto& car = cars[id];
 
-	app.run();
+			const auto position = Vehicle::getPosition(id);
+			const int  x = position.x;
+			const int  y = position.y;
 
-	sumo_simulation_thread.join();
+			const double heading = Vehicle::getAngle(id);
+			car.x = x;
+			car.y = y;
+			car.heading = heading;
+			car.alive = true;
+		}
+	}
+
+	indicators::show_console_cursor(true);
+
+	Simulation::close();
 
 	return 0;
 }
