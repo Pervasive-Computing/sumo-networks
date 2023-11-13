@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.23 FATAL_ERROR)
-project(sumo-network-sim VERSION 0.1.0 LANGUAGES CXX) # ${PROJECT_NAME}
+project(sumo-sim-data-publisher VERSION 0.1.0 LANGUAGES CXX) # ${PROJECT_NAME}
 
 # Set default build type to release
 if(NOT CMAKE_BUILD_TYPE)
@@ -49,7 +49,6 @@ find_package(tl-expected REQUIRED)
 list(APPEND external_library_targets tl::expected)
 find_package(indicators REQUIRED)
 list(APPEND external_library_targets indicators::indicators)
-# find_package(ZeroMQ REQUIRED)
 find_package(cppzmq REQUIRED)
 list(APPEND external_library_targets cppzmq)
 
@@ -58,18 +57,18 @@ foreach(external_library_target ${external_library_targets})
     message(STATUS "  ${external_library_target}")
 endforeach()
 
-
-add_executable(${PROJECT_NAME} uwebsockets.cpp)
+add_executable(${PROJECT_NAME} src/sumo-sim-data-publisher.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE ${external_library_targets})
-
 # Link with SUMO's libtraci
 # g++ -o test -std=c++11 -I$SUMO_HOME/src test.cpp -L$SUMO_HOME/bin -ltracicpp
 target_include_directories(${PROJECT_NAME} PRIVATE $ENV{SUMO_HOME}/src) # Equivalent to -I$SUMO_HOME/src
-
 # target_include_directories(${PROJECT_NAME} PRIVATE )
 # target_link_libraries(${PROJECT_NAME} PRIVATE $ENV{SUMO_HOME}/tools/libtraci/_libtraci.so) # Equivalent to -ltracicpp
 target_link_libraries(${PROJECT_NAME} PRIVATE tracicpp)
 target_link_directories(${PROJECT_NAME} PRIVATE $ENV{SUMO_HOME}/bin) # Equivalent to -L$SUMO_HOME/bin
-
-
 target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wpedantic)
+
+add_executable(zmq-client-demo src/zmq-client-demo.cpp)
+target_link_libraries(zmq-client-demo PRIVATE ${external_library_targets})
+target_compile_options(zmq-client-demo PRIVATE -Wall -Wextra -Wpedantic)
+
