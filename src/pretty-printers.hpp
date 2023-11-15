@@ -42,7 +42,7 @@ auto pprint(const T f) -> void {
 template <typename T, std::enable_if_t<std::is_integral_v<T>, bool> = true>
 [[nodiscard]]
 auto pformat(const T i) -> std::string {
-    return fmt::format(fg(fmt::color::blue), "{}", i);
+    return fmt::format(fg(fmt::color::aquamarine), "{}", i);
 }
 
 template <typename T, std::enable_if_t<std::is_integral_v<T>, bool> = true>
@@ -90,8 +90,3 @@ auto pprint(const std::vector<T>& v, const int indent_by = 4, const int depth = 
     }
     fmt::print("{}}}{}\n", escape_codes::markup::bold, escape_codes::reset);
 }
-
-// template <>
-// auto pprint<bool>(bool b) -> void {
-//     pprint_bool(b);
-// }

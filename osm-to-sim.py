@@ -5,7 +5,6 @@ import sys
 import argparse
 import re
 from pathlib import Path
-from datetime import datetime
 import shutil
 import subprocess
 

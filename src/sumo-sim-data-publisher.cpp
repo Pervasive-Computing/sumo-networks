@@ -3,7 +3,6 @@ using namespace std::chrono_literals;
 #include <cmath>
 #include <filesystem>
 #include <queue>
-namespace fs = std::filesystem;
 #include "ansi-escape-codes.hpp"
 #include "debug-macro.hpp"
 #include "pretty-printers.hpp"
@@ -50,10 +49,10 @@ using f32 = float;
 using f64 = double;
 
 // [[nodiscard]] auto walkdir(
-// 	const std::string& dir, const std::function<bool(const fs::directory_entry&)>& filter =
+// 	const std::string& dir, const std::function<bool(const std::filesystem::directory_entry&)>& filter =
 // 								[](const auto&) { return true; }) -> std::vector<std::string> {
 // 	std::vector<std::string> files;
-// 	for (const auto& entry : fs::directory_iterator(dir)) {
+// 	for (const auto& entry : std::filesystem::directory_iterator(dir)) {
 // 		if (! filter(entry)) {
 // 			continue;
 // 		}
@@ -80,12 +79,12 @@ using f64 = double;
 // </configuration>
 
 struct SumoConfiguration {
-	fs::path net_file;
-	fs::path route_files;
-	fs::path additional_files;
+	std::filesystem::path net_file;
+	std::filesystem::path route_files;
+	std::filesystem::path additional_files;
 };
 
-auto parse_sumocfg(const fs::path& sumocfg_path) -> tl::expected<SumoConfiguration, std::string> {
+auto parse_sumocfg(const std::filesystem::path& sumocfg_path) -> tl::expected<SumoConfiguration, std::string> {
 	pugi::xml_document sumocfg_xml_doc;
 
 	pugi::xml_parse_result result = sumocfg_xml_doc.load_file(sumocfg_path.string().c_str());
@@ -137,13 +136,13 @@ enum class get_sumo_home_directory_path_error {
 	environment_variable_not_a_directory,
 };
 
-auto get_sumo_home_directory_path() -> tl::expected<fs::path, get_sumo_home_directory_path_error> {
+auto get_sumo_home_directory_path() -> tl::expected<std::filesystem::path, get_sumo_home_directory_path_error> {
 	// Check that $SUMO_HOME is set
 	if (const char* sumo_home = std::getenv("SUMO_HOME")) {
 		// $SUMO_HOME is set
-		const fs::path sumo_home_path = sumo_home;
+		const std::filesystem::path sumo_home_path = sumo_home;
 		// Check that $SUMO_HOME points to a directory that exists on the disk
-		if (! fs::exists(sumo_home_path)) {
+		if (! std::filesystem::exists(sumo_home_path)) {
 			return tl::unexpected(
 				get_sumo_home_directory_path_error::environment_variable_not_a_directory);
 		}
@@ -158,7 +157,7 @@ struct ProgramOptions {
 	u16		 port;
 	u16		 sumo_port;
 	i32		 simulation_steps;
-	fs::path sumocfg_path;
+	std::filesystem::path sumocfg_path;
 	// bool	 gui = true;
 	bool verbose = false;
 };
@@ -248,8 +247,8 @@ auto parse_args(argparse::ArgumentParser argv_parser, int argc, char** argv)
 
 	// TODO: maybe convert to absolute path
 	const std::string sumocfg = argv_parser.get<std::string>("sumocfg");
-	const fs::path	  sumocfg_path = sumocfg;
-	if (! fs::exists(sumocfg_path)) {
+	const std::filesystem::path	  sumocfg_path = sumocfg;
+	if (! std::filesystem::exists(sumocfg_path)) {
 		return tl::unexpected(
 			fmt::format("SUMO configuration file not found: {}", sumocfg_path.filename().string()));
 	}
@@ -307,7 +306,7 @@ auto main(int argc, char** argv) -> int {
 		}
 	}();
 
-	const fs::path cwd = fs::current_path();
+	const std::filesystem::path cwd = std::filesystem::current_path();
 
 	if (options.verbose) {
 		spdlog::debug("cwd: {}", cwd.string());
@@ -322,8 +321,8 @@ auto main(int argc, char** argv) -> int {
 		// <additional-files value="{...}.poly.xml"/>
 		// Most likely are defined relative to the parent directory of the sumocfg
 		// file.
-		fs::current_path(options.sumocfg_path.parent_path());
-		spdlog::warn("Changed cwd to {}", fs::current_path().string());
+		std::filesystem::current_path(options.sumocfg_path.parent_path());
+		spdlog::warn("Changed cwd to {}", std::filesystem::current_path().string());
 	}
 
 	// Parse the SUMO configuration file
@@ -343,14 +342,12 @@ auto main(int argc, char** argv) -> int {
 	}
 
 	phmap::flat_hash_map<std::string, Car> cars;
-	std::mutex							   cars_mutex;
 
 	const auto vehicles = route_files_xml_doc.child("routes").children("vehicle");
 	for (const auto& vehicle : vehicles) {
 		const std::string vehicle_id = vehicle.attribute("id").as_string();
 		cars[vehicle_id] = Car {};
 	}
-
 
 	zmq::context_t	  zmq_ctx;
 	zmq::socket_t	  sock(zmq_ctx, zmq::socket_type::pub);
@@ -359,13 +356,11 @@ auto main(int argc, char** argv) -> int {
 	spdlog::info("Bound zmq PUB socket to {}", addr);
 	const std::string_view m = "Hello, world";
 	sock.send(zmq::buffer(m));
-	// sock.send(zmq::buffer(m), zmq::send_flags::dontwait);
 
 	spdlog::info("Found {} vehicles in {}", cars.size(), sumocfg.route_files.string());
-	const int num_retries = 100;
-	Simulation::init(options.sumo_port, num_retries, "localhost");
+	const int num_retries_sumo_sim_connect = 100;
+	Simulation::init(options.sumo_port, num_retries_sumo_sim_connect, "localhost");
 	const double dt = Simulation::getDeltaT();
-
 
 	spdlog::info("dt: {}", dt);
 
@@ -395,7 +390,6 @@ auto main(int argc, char** argv) -> int {
 
 		// Get (x,y, theta) of all vehicles
 		auto vehicles_ids = Vehicle::getIDList();
-		// std::scoped_lock lock(cars_mutex);
 
 		for (const auto& id : vehicles_ids) {
 			auto& car = cars[id];
@@ -409,6 +403,7 @@ auto main(int argc, char** argv) -> int {
 			car.alive = true;
 		}
 
+		// TODO: preallocate some of the memory structures used in this block
 		{ // Publish the data to clients
 			json j;
 			for (const auto& item : cars) {
