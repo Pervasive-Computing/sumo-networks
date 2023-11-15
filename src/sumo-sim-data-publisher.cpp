@@ -86,7 +86,7 @@ struct SumoConfiguration {
 
 auto parse_sumocfg(const std::filesystem::path& sumocfg_path) -> tl::expected<SumoConfiguration, std::string> {
 	pugi::xml_document sumocfg_xml_doc;
-
+	spdlog::info("sumocfg_path: {}, cwd: {}", sumocfg_path.string(), std::filesystem::current_path().string());
 	pugi::xml_parse_result result = sumocfg_xml_doc.load_file(sumocfg_path.string().c_str());
 	if (! result) {
 		return tl::unexpected(
@@ -313,6 +313,16 @@ auto main(int argc, char** argv) -> int {
 		spdlog::debug("sumocfg: {}", options.sumocfg_path.string());
 	}
 
+
+	// Parse the SUMO configuration file
+	const auto sumocfg = parse_sumocfg(options.sumocfg_path)
+							 .map_error([](const auto& err) {
+								 spdlog::error("{}", err);
+								 std::exit(1);
+							 })
+							 .value();
+
+
 	if (options.sumocfg_path.has_parent_path() && options.sumocfg_path.parent_path() != cwd) {
 		// The SUMO configuration file is not in the current directory
 		// Change cwd to the parent directory of sumocfg, as
@@ -324,14 +334,6 @@ auto main(int argc, char** argv) -> int {
 		std::filesystem::current_path(options.sumocfg_path.parent_path());
 		spdlog::warn("Changed cwd to {}", std::filesystem::current_path().string());
 	}
-
-	// Parse the SUMO configuration file
-	const auto sumocfg = parse_sumocfg(options.sumocfg_path)
-							 .map_error([](const auto& err) {
-								 spdlog::error("{}", err);
-								 std::exit(1);
-							 })
-							 .value();
 
 	pugi::xml_document route_files_xml_doc;
 
