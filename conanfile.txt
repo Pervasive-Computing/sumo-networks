@@ -13,6 +13,9 @@ tl-expected/1.1.0
 indicators/2.3
 # zeromq/4.3.5
 cppzmq/4.10.0
+# protobuf/3.21.12
+# flann/1.9.2
+nanoflann/1.5.0
 
 [generators]
 CMakeToolchain

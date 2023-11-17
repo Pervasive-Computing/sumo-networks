@@ -72,3 +72,7 @@ add_executable(zmq-client-demo src/zmq-client-demo.cpp)
 target_link_libraries(zmq-client-demo PRIVATE ${external_library_targets})
 target_compile_options(zmq-client-demo PRIVATE -Wall -Wextra -Wpedantic)
 
+
+add_executable(parse-streetlamps-from-osm src/parse-streetlamps-from-osm.cpp)
+target_link_libraries(parse-streetlamps-from-osm PRIVATE ${external_library_targets})
+target_compile_options(parse-streetlamps-from-osm PRIVATE -Wall -Wextra -Wpedantic)

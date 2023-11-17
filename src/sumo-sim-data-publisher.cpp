@@ -33,6 +33,9 @@ using namespace nlohmann::literals; // for ""_json
 #include <zmq.hpp>
 
 #include <libsumo/libtraci.h>
+
+// #include "cars.pb.h"
+
 using namespace libtraci;
 
 using u8 = std::uint8_t;
@@ -131,6 +134,21 @@ struct Car {
 	}
 };
 
+struct StreetLamp {
+	std::int64_t id;
+	float lat;
+	float lon;
+};
+
+[[nodiscard]]
+auto pformat(const StreetLamp& lamp) -> std::string {
+	return fmt::format("(StreetLamp) {{ .id = {}, .lat = {}, .lon = {} }}", lamp.id, lamp.lat, lamp.lon);
+}
+
+auto pprint(const StreetLamp& lamp) -> void {
+	fmt::println("{}", pformat(lamp));
+}
+
 enum class get_sumo_home_directory_path_error {
 	environment_variable_not_set,
 	environment_variable_not_a_directory,
@@ -158,6 +176,7 @@ struct ProgramOptions {
 	u16		 sumo_port;
 	i32		 simulation_steps;
 	std::filesystem::path sumocfg_path;
+	std::filesystem::path osm_path;
 	// bool	 gui = true;
 	bool verbose = false;
 };
@@ -172,11 +191,14 @@ auto pprint(const ProgramOptions& options) -> void {
 				 pformat(options.simulation_steps));
 	fmt::println("{}{}.sumocfg_path{} = {},", indent, markup::bold, reset,
 				 pformat(options.sumocfg_path));
+	fmt::println("{}{}.osm_path{} = {},", indent, markup::bold, reset,
+				 pformat(options.osm_path));
 	// fmt::println("{}{}.gui{} = {},", indent, markup::bold, reset, pformat(options.gui));
 	fmt::println("{}{}.verbose{} = {},", indent, markup::bold, reset, pformat(options.verbose));
 	fmt::println("}};");
 }
 
+[[nodiscard]]
 auto create_argv_parser() -> argparse::ArgumentParser {
 	auto argv_parser = argparse::ArgumentParser(__FILE__, "0.1.0");
 
@@ -210,6 +232,10 @@ auto create_argv_parser() -> argparse::ArgumentParser {
 		.scan<'i', int>()
 		.help("Number of update steps to perform in the simulation, constraints: 0 < "
 			  "simulation-steps");
+
+	argv_parser.add_argument("--osm")
+		.required()
+		.help("OpenStreetMap file of the area");
 
 	argv_parser.add_argument("sumocfg").required().help("SUMO configuration file");
 	return argv_parser;
@@ -245,9 +271,7 @@ auto parse_args(argparse::ArgumentParser argv_parser, int argc, char** argv)
 		return tl::unexpected("simulation-steps must be positive");
 	}
 
-	// TODO: maybe convert to absolute path
-	const std::string sumocfg = argv_parser.get<std::string>("sumocfg");
-	const std::filesystem::path	  sumocfg_path = sumocfg;
+	const auto sumocfg_path = std::filesystem::absolute(argv_parser.get<std::string>("sumocfg"));
 	if (! std::filesystem::exists(sumocfg_path)) {
 		return tl::unexpected(
 			fmt::format("SUMO configuration file not found: {}", sumocfg_path.filename().string()));
@@ -259,11 +283,24 @@ auto parse_args(argparse::ArgumentParser argv_parser, int argc, char** argv)
 						sumocfg_path.extension().string()));
 	}
 
+	const auto osm_path = std::filesystem::absolute(argv_parser.get<std::string>("osm"));
+	if (! std::filesystem::exists(osm_path)) {
+		return tl::unexpected(
+			fmt::format("OSM configuration file not found: {}", osm_path.filename().string()));
+	}
+
+	if (! (osm_path.has_extension()) || osm_path.extension().string() != ".osm") {
+		return tl::unexpected(
+			fmt::format("OSM configuration file must have extension .osm, not {}",
+						osm_path.extension().string()));
+	}
+
 	return ProgramOptions {
 		.port = static_cast<u16>(port),
 		.sumo_port = static_cast<u16>(sumo_port),
 		.simulation_steps = simulation_steps,
 		.sumocfg_path = sumocfg_path,
+		.osm_path = osm_path,
 		// .gui = argv_parser.get<bool>("gui"),
 		.verbose = argv_parser.get<bool>("verbose"),
 	};
@@ -351,6 +388,8 @@ auto main(int argc, char** argv) -> int {
 		cars[vehicle_id] = Car {};
 	}
 
+	// TODO: parse osm file an extract all lamps
+
 	zmq::context_t	  zmq_ctx;
 	zmq::socket_t	  sock(zmq_ctx, zmq::socket_type::pub);
 	const std::string addr = fmt::format("tcp://*:{}", options.port);
@@ -397,6 +436,13 @@ auto main(int argc, char** argv) -> int {
 			auto& car = cars[id];
 
 			const auto	 position = Vehicle::getPosition(id);
+			const auto geo = Simulation::convertGeo(position.x, position.y);
+			fmt::println("geo.x = {}, geo.y = {}", geo.x, geo.y);
+			// const auto lat = Vehicle::getLatitude(id);
+			const double lat = geo.y;
+			const double lon = geo.x;
+			// TODO: convert the lamps lon/lat into x/y once in the preprocessing step
+
 			const double heading = Vehicle::getAngle(id);
 
 			car.x = position.x;
@@ -408,6 +454,7 @@ auto main(int argc, char** argv) -> int {
 		// TODO: preallocate some of the memory structures used in this block
 		{ // Publish the data to clients
 			json j;
+			// Find all cars that are alive and put them into a json object
 			for (const auto& item : cars) {
 				const Car& car = item.second;
 				if (! car.alive) {
