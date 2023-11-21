@@ -1,11 +1,9 @@
+#include <algorithm>
 #include <chrono>
 using namespace std::chrono_literals;
 #include <cmath>
 #include <filesystem>
 #include <queue>
-#include "ansi-escape-codes.hpp"
-#include "debug-macro.hpp"
-#include "pretty-printers.hpp"
 #include <functional>
 #include <iostream>
 #include <mutex>
@@ -34,6 +32,12 @@ using namespace nlohmann::literals; // for ""_json
 
 #include <libsumo/libtraci.h>
 
+#include "ansi-escape-codes.hpp"
+#include "debug-macro.hpp"
+#include "pretty-printers.hpp"
+#include "streetlamp.hpp"
+
+
 // #include "cars.pb.h"
 
 using namespace libtraci;
@@ -50,6 +54,45 @@ using i64 = std::int64_t;
 
 using f32 = float;
 using f64 = double;
+
+/**
+ * Calculates the haversine distance between two points on the Earth's surface expressed in lon/lat coordinates.
+ * @note https://en.wikipedia.org/wiki/Haversine_formula
+ * @note https://stackoverflow.com/questions/639695/how-to-convert-latitude-or-longitude-to-meters/11172685#11172685
+ * 
+ * @param lon1 The longitude of the first point in degrees.
+ * @param lat1 The latitude of the first point in degrees.
+ * @param lon2 The longitude of the second point in degrees.
+ * @param lat2 The latitude of the second point in degrees.
+ * @return The haversine distance between the two points in meters.
+ */
+inline auto haversine(const double lon1, const double lat1, const double lon2, const double lat2) -> double {
+	constexpr double earth_radius = 6371.0; // Earth radius in kilometers
+	constexpr double degrees_to_radians = M_PI / 180.0;
+
+	// Convert latitude and longitude from degrees to radians
+	const double lon1_rad = lon1 * degrees_to_radians;
+	const double lat1_rad = lat1 * degrees_to_radians;
+	const double lon2_rad = lon2 * degrees_to_radians;
+	const double lat2_rad = lat2 * degrees_to_radians;
+
+	// Calculate the differences between the latitudes and longitudes
+	const double delta_lon = lon2_rad - lon1_rad;
+	const double delta_lat = lat2_rad - lat1_rad;
+
+	// Calculate the square of half the chord length between the points
+	const double a = std::sin(delta_lat / 2.0) * std::sin(delta_lat / 2.0) +
+					 std::cos(lat1_rad) * std::cos(lat2_rad) *
+					 std::sin(delta_lon / 2.0) * std::sin(delta_lon / 2.0);
+
+	// Calculate the angular distance in radians
+	const double c = 2.0 * std::atan2(std::sqrt(a), std::sqrt(1.0 - a));
+
+	// Calculate the distance in meters
+	const double distance = earth_radius * c * 1000.0;
+
+	return distance;
+}
 
 // [[nodiscard]] auto walkdir(
 // 	const std::string& dir, const std::function<bool(const std::filesystem::directory_entry&)>& filter =
@@ -80,6 +123,15 @@ using f64 = double;
 //         <start value="true"/>
 //     </gui_only>
 // </configuration>
+
+
+static inline void show_console_cursor(bool const show) {
+  std::fputs(show ? "\033[?25h" : "\033[?25l", stdout);
+}
+
+static inline void erase_line() {
+  std::fputs("\r\033[K", stdout);
+}
 
 struct SumoConfiguration {
 	std::filesystem::path net_file;
@@ -134,20 +186,7 @@ struct Car {
 	}
 };
 
-struct StreetLamp {
-	std::int64_t id;
-	float lat;
-	float lon;
-};
 
-[[nodiscard]]
-auto pformat(const StreetLamp& lamp) -> std::string {
-	return fmt::format("(StreetLamp) {{ .id = {}, .lat = {}, .lon = {} }}", lamp.id, lamp.lat, lamp.lon);
-}
-
-auto pprint(const StreetLamp& lamp) -> void {
-	fmt::println("{}", pformat(lamp));
-}
 
 enum class get_sumo_home_directory_path_error {
 	environment_variable_not_set,
@@ -388,8 +427,7 @@ auto main(int argc, char** argv) -> int {
 		cars[vehicle_id] = Car {};
 	}
 
-	// TODO: parse osm file an extract all lamps
-
+	
 	zmq::context_t	  zmq_ctx;
 	zmq::socket_t	  sock(zmq_ctx, zmq::socket_type::pub);
 	const std::string addr = fmt::format("tcp://*:{}", options.port);
@@ -402,6 +440,47 @@ auto main(int argc, char** argv) -> int {
 	const int num_retries_sumo_sim_connect = 100;
 	Simulation::init(options.sumo_port, num_retries_sumo_sim_connect, "localhost");
 	const double dt = Simulation::getDeltaT();
+
+	auto streetlamps = extract_streetlamps_from_osm(options.osm_path)
+								 .map_error([](const auto& err) {
+									if (err == extract_streetlamps_from_osm_error::file_not_found) {
+										spdlog::error("OSM file not found");
+									} else if (err == extract_streetlamps_from_osm_error::xml_parse_error) {
+										spdlog::error("Failed to parse OSM file");
+									}
+									std::exit(1);
+								 })
+								 .value();
+
+
+	
+	const auto n_threads = std::thread::hardware_concurrency();
+	spdlog::info("n_threads: {}", n_threads);
+
+	// Create a thread pool
+	// std::vector<std::thread> threads;
+	// threads.reserve(n_threads);
+
+
+
+	// AHHH
+	// Change each street lamp's lon/lat into x/y
+	// We only need to do this once, as the street lamps are static
+	// We need to do this since the OpenStreetMap file contains lon/lat coordinates of the street lamps
+	// but the SUMO simulation uses x/y coordinates for the vehicles
+	// We do this here an not in the parsing step because we need to have the simulation running
+	// to convert lon/lat to x/y
+	for (auto& lamp : streetlamps) {
+		const auto geo = Simulation::convertGeo(lamp.lon, lamp.lat, true);
+		lamp.lon = geo.x;
+		lamp.lat = geo.y;
+	}
+
+	std::for_each(std::begin(streetlamps), std::end(streetlamps), [](const auto& lamp) {
+		pprint(lamp);
+	});
+
+	spdlog::info("streetlamps.size(): {}", streetlamps.size());
 
 	spdlog::info("dt: {}", dt);
 
@@ -420,14 +499,16 @@ auto main(int argc, char** argv) -> int {
 		indicators::option::FontStyles {
 			std::vector<indicators::FontStyle> {indicators::FontStyle::bold}}};
 
+
+
 	// TODO: figure out how to subscribe an extract data from the simulation
 	for (int i = 0; i < options.simulation_steps; ++i) {
 		Simulation::step();
 		// Show step/total_steps instead of percent in progress bar
 		const double percent_done = static_cast<double>(i) / options.simulation_steps * 100.0;
-		bar.set_progress(percent_done);
-		bar.set_option(
-			indicators::option::PostfixText(fmt::format("{}/{}", i, options.simulation_steps)));
+		// bar.set_progress(percent_done);
+		// bar.set_option(
+		// 	indicators::option::PostfixText(fmt::format("{}/{}", i, options.simulation_steps)));
 
 		// Get (x,y, theta) of all vehicles
 		auto vehicles_ids = Vehicle::getIDList();
@@ -436,11 +517,11 @@ auto main(int argc, char** argv) -> int {
 			auto& car = cars[id];
 
 			const auto	 position = Vehicle::getPosition(id);
-			const auto geo = Simulation::convertGeo(position.x, position.y);
-			fmt::println("geo.x = {}, geo.y = {}", geo.x, geo.y);
+			// const auto geo = Simulation::convertGeo(position.x, position.y);
+			// fmt::println("geo.x = {}, geo.y = {}", geo.x, geo.y);
 			// const auto lat = Vehicle::getLatitude(id);
-			const double lat = geo.y;
-			const double lon = geo.x;
+			// const double lat = geo.y;
+			// const double lon = geo.x;
 			// TODO: convert the lamps lon/lat into x/y once in the preprocessing step
 
 			const double heading = Vehicle::getAngle(id);

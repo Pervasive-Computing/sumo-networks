@@ -57,7 +57,11 @@ foreach(external_library_target ${external_library_targets})
     message(STATUS "  ${external_library_target}")
 endforeach()
 
+add_library(streetlamp STATIC src/streetlamp.cpp)
+target_link_libraries(streetlamp PRIVATE ${external_library_targets})
+
 add_executable(${PROJECT_NAME} src/sumo-sim-data-publisher.cpp)
+target_link_libraries(${PROJECT_NAME} PRIVATE streetlamp)
 target_link_libraries(${PROJECT_NAME} PRIVATE ${external_library_targets})
 # Link with SUMO's libtraci
 # g++ -o test -std=c++11 -I$SUMO_HOME/src test.cpp -L$SUMO_HOME/bin -ltracicpp
