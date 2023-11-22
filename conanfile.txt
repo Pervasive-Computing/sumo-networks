@@ -18,6 +18,7 @@ cppzmq/4.10.0
 nanoflann/1.5.0
 tomlplusplus/3.4.0
 bshoshany-thread-pool/3.5.0
+catch2/3.4.0
 
 [generators]
 CMakeToolchain

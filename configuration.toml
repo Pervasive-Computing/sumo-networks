@@ -1,4 +1,4 @@
-verbose = false
+verbose = true
 port = 5555
 publish-rate = 10 # in Hz
 
@@ -6,7 +6,7 @@ publish-rate = 10 # in Hz
 port = 10000
 sumocfg-path = "katrinebjerg-lamp/katrinebjerg-lamp.sumocfg"
 osm-path = "katrinebjerg-lamp/katrinebjerg-lamp.osm"
-simulation-steps = 10000
+simulation-steps = 1000
 
 [sumo.spawn]
 enabled = true

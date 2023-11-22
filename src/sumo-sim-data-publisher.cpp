@@ -44,6 +44,7 @@ using namespace nlohmann::literals; // for ""_json
 #include "debug-macro.hpp"
 #include "pretty-printers.hpp"
 #include "streetlamp.hpp"
+#include "humantime.hpp"
 
 using namespace libtraci;
 
@@ -517,6 +518,10 @@ auto parse_configuration(const std::filesystem::path& configuration_file_path) -
 	};
 }
 
+namespace topics {
+	static const auto cars = std::string("cars");
+	static const auto streetlamps = std::string("streetlamps");
+};
 
 auto main(int argc, char** argv) -> int {
 	const auto configuration_file_path = std::filesystem::path("configuration.toml");
@@ -609,7 +614,7 @@ auto main(int argc, char** argv) -> int {
 		return 1;
 	}
 
-	// phmap::flat_hash_map<std::string, Car> cars;
+	// TODO: maybe creating the entire hashmap here is not the most efficient way
 	phmap::flat_hash_map<int, Car> cars;
 
 	const auto vehicles = route_files_xml_doc.child("routes").children("vehicle");
@@ -618,7 +623,10 @@ auto main(int argc, char** argv) -> int {
 		const auto vehicle_id = vehicle.attribute("id").as_int();
 		cars[vehicle_id] = Car {};
 	}
+	spdlog::info("Found {} vehicles in {}", cars.size(), sumocfg.route_files.string());
+	spdlog::info("Created hashmap with {} vehicles", cars.size());
 
+	
 	
 	zmq::context_t	  zmq_ctx;
 	zmq::socket_t	  sock(zmq_ctx, zmq::socket_type::pub);
@@ -626,10 +634,7 @@ auto main(int argc, char** argv) -> int {
 	const std::string addr = fmt::format("tcp://*:{}", options.port);
 	sock.bind(addr);
 	spdlog::info("Bound zmq PUB socket to {}", addr);
-	// const std::string_view m = "Hello, world";
-	// sock.send(zmq::buffer(m));
 
-	spdlog::info("Found {} vehicles in {}", cars.size(), sumocfg.route_files.string());
 	const int num_retries_sumo_sim_connect = 100;
 	Simulation::init(options.sumo_port, num_retries_sumo_sim_connect, "localhost");
 	const double dt = Simulation::getDeltaT();
@@ -645,13 +650,6 @@ auto main(int argc, char** argv) -> int {
 								 })
 								 .value();
 
-
-	
-	
-	// Create a thread pool
-	// std::vector<std::thread> threads;
-	// threads.reserve(n_threads);
-
 	// Change each street lamp's lon/lat into x/y
 	// We only need to do this once, as the street lamps are static
 	// We need to do this since the OpenStreetMap file contains lon/lat coordinates of the street lamps
@@ -664,26 +662,22 @@ auto main(int argc, char** argv) -> int {
 		lamp.lat = geo.y;
 	}
 
-	// std::for_each(std::begin(streetlamps), std::end(streetlamps), [](const auto& lamp) {
-	// 	pprint(lamp);
-	// });
-
 	spdlog::info("streetlamps.size(): {}", streetlamps.size());
-
-	// spdlog::info("dt: {}", dt);
+	spdlog::info("dt: {}", dt);
 
 	// Hide cursor
 	indicators::show_console_cursor(false);
 
 	auto bar = indicators::BlockProgressBar {
-		indicators::option::BarWidth {80}, indicators::option::Start {"["},
+		indicators::option::BarWidth {80},
+		indicators::option::Start {"["},
 		// indicators::option::Fill{"■"},
 		// indicators::option::Lead{"■"},
 		// indicators::option::Remainder{"-"},
 		indicators::option::End {" ]"},
 		// indicators::option::PostfixText{""},
 		indicators::option::ShowElapsedTime {true},
-		indicators::option::ForegroundColor {indicators::Color::yellow},
+		indicators::option::ForegroundColor {indicators::Color::blue},
 		indicators::option::FontStyles {
 			std::vector<indicators::FontStyle> {indicators::FontStyle::bold}}};
 
@@ -693,7 +687,6 @@ auto main(int argc, char** argv) -> int {
 
 	const auto n_hardware_threads = std::thread::hardware_concurrency();
 	spdlog::info("n_threads: {}", n_hardware_threads);
-	// const auto n_threads_in_pool = std::max(4, n_hardware_threads / 2);
 	const auto n_threads_in_pool = n_hardware_threads - 1;
 
 	// Constructs a thread pool with as many threads as available in the hardware.
@@ -702,13 +695,9 @@ auto main(int argc, char** argv) -> int {
 
 	for (int simulation_step = 0; simulation_step < options.simulation_steps; ++simulation_step) {
 		// TODO: keep track of the accumelated time of the simulation
+		const auto t_start = std::chrono::high_resolution_clock::now();
 		Simulation::step();
-		{ // Update the progress bar
-			const double percent_done = static_cast<double>(simulation_step) / options.simulation_steps * 100.0;
-			bar.set_progress(percent_done);
-			bar.set_option(
-			indicators::option::PostfixText(fmt::format("{}/{}", simulation_step, options.simulation_steps)));
-		}
+
 		
 		{ // Get (x,y, theta) of all vehicles
 			const auto vehicles_ids = Vehicle::getIDList();
@@ -736,6 +725,7 @@ auto main(int argc, char** argv) -> int {
 				for (auto& car : cars) {
 					// const int car_id = car.first;
 					const auto& car_data = car.second;
+					// TODO PERF: use squared distance instead of distance to avoid the sqrt call
 					const double distance = std::hypot(car_data.x - lamp.lon, car_data.y - lamp.lat);
 					if (distance <= options.streetlamp_distance_threshold) {
 						// The car is close to the street lamp
@@ -749,11 +739,8 @@ auto main(int argc, char** argv) -> int {
 				}
 			}
 		};
-		// const auto t_end = std::chrono::high_resolution_clock::now();
-		// const auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t_end - t_start);
-		// fmt::print("duration: {}\n", duration.count());
 
-		auto multi_future = pool.parallelize_loop(0, streetlamps.size(), look_for_cars_close_to_streetlamps, 10);
+		auto multi_future = pool.parallelize_loop(0, streetlamps.size(), look_for_cars_close_to_streetlamps);
 
 		// TODO: preallocate some of the memory structures used in this block
 		{ // Publish information about the position and heading of all active cars
@@ -773,13 +760,9 @@ auto main(int argc, char** argv) -> int {
 
 			// Serialize to CBOR encoding format
 			const std::vector<u8> v = json::to_cbor(j);
-
-			// Convert to std::string
 			const std::string payload(v.begin(), v.end());
-			const std::string topic = "cars";
-
 			// Send the data to all clients
-			sock.send(zmq::buffer(topic + payload), zmq::send_flags::dontwait);
+			sock.send(zmq::buffer(topics::cars + payload), zmq::send_flags::dontwait);
 		}
 
 		// Wait for all threads in the thread pool to finish
@@ -788,23 +771,35 @@ auto main(int argc, char** argv) -> int {
 		// This is better than calling .wait() right after the call to pool.parallelize_loop()
 		multi_future.wait();
 
-		
-		
 		{ // Publish information about which street lamps that have vehicles nearby
 			json array = json::array();
-			for (int idx = 0; idx < j; idx++) {
+			for (int idx = 0; idx < num_streetlamps_with_vehicles_nearby; idx++) {
 				array.push_back(streetlamp_ids_with_vehicles_nearby[idx]);
 			}
 			// Serialize to CBOR encoding format
 			const std::vector<u8> v = json::to_cbor(array);
-			// Convert to std::string
 			const std::string payload(v.begin(), v.end());
-			const std::string topic = "streetlamps";
 			// Send the data to all clients
-			sock.send(zmq::buffer(topic + payload), zmq::send_flags::dontwait);
+			sock.send(zmq::buffer(topics::streetlamps + payload), zmq::send_flags::dontwait);
 		}
 
-		
+		{ // Update the progress bar
+			const auto t_end = std::chrono::high_resolution_clock::now();
+			const auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t_end - t_start);
+
+			const double percent_done = static_cast<double>(simulation_step) / options.simulation_steps * 100.0;
+			bar.set_progress(percent_done);
+			// TODO: estimate the remaining time of the simulation
+			static long duration_avg = 0;
+			duration_avg = (duration_avg + duration.count()) / 2;
+			const auto remaining_time = std::chrono::microseconds(duration_avg * (options.simulation_steps - simulation_step));
+			std::string postfix;
+			if (options.verbose) {
+				postfix = fmt::format("simulation-step: {}/{} (in percent: {:.2f}%) took: {} μs, estimated time to completion: {}", simulation_step, options.simulation_steps, percent_done, duration.count(), humantime(remaining_time.count()));
+
+			}
+			bar.set_option(indicators::option::PostfixText(postfix));
+		}
 	}
 
 	indicators::show_console_cursor(true);

@@ -84,3 +84,10 @@ target_compile_options(zmq-client-demo PRIVATE -Wall -Wextra -Wpedantic)
 add_executable(parse-streetlamps-from-osm src/parse-streetlamps-from-osm.cpp)
 target_link_libraries(parse-streetlamps-from-osm PRIVATE ${external_library_targets})
 target_compile_options(parse-streetlamps-from-osm PRIVATE -Wall -Wextra -Wpedantic)
+
+
+find_package(Catch2 REQUIRED)
+add_executable(test-ringbuf tests/ringbuf.cpp)
+target_include_directories(test-ringbuf PRIVATE src)
+target_link_libraries(test-ringbuf PRIVATE Catch2::Catch2WithMain)
+
