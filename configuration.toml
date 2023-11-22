@@ -1,5 +1,5 @@
 verbose = false
-port = 12000
+port = 5555
 publish-rate = 10 # in Hz
 
 [sumo]

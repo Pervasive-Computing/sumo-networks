@@ -35,6 +35,8 @@ using namespace nlohmann::literals; // for ""_json
 
 #include <zmq.hpp>
 #include <toml.hpp>
+#include <BS_thread_pool.hpp>
+
 
 #include <libsumo/libtraci.h>
 
@@ -645,9 +647,7 @@ auto main(int argc, char** argv) -> int {
 
 
 	
-	const auto n_threads = std::thread::hardware_concurrency();
-	spdlog::info("n_threads: {}", n_threads);
-
+	
 	// Create a thread pool
 	// std::vector<std::thread> threads;
 	// threads.reserve(n_threads);
@@ -691,14 +691,23 @@ auto main(int argc, char** argv) -> int {
 	// Preallocate memory for the streetlamp_ids_with_vehicles_nearby vector
 	auto streetlamp_ids_with_vehicles_nearby = std::vector<std::int64_t>(streetlamps.size(), 0);
 
+	const auto n_hardware_threads = std::thread::hardware_concurrency();
+	spdlog::info("n_threads: {}", n_hardware_threads);
+	// const auto n_threads_in_pool = std::max(4, n_hardware_threads / 2);
+	const auto n_threads_in_pool = n_hardware_threads - 1;
+
+	// Constructs a thread pool with as many threads as available in the hardware.
+	BS::thread_pool pool(n_threads_in_pool);
+	spdlog::info("Created thread pool with {} threads", pool.get_thread_count());
+
 	// TODO: figure out how to subscribe an extract data from the simulation
-	for (int i = 0; i < options.simulation_steps; ++i) {
+	for (int simulation_step = 0; simulation_step < options.simulation_steps; ++simulation_step) {
 		Simulation::step();
 		// Show step/total_steps instead of percent in progress bar
-		const double percent_done = static_cast<double>(i) / options.simulation_steps * 100.0;
+		const double percent_done = static_cast<double>(simulation_step) / options.simulation_steps * 100.0;
 		bar.set_progress(percent_done);
 		bar.set_option(
-			indicators::option::PostfixText(fmt::format("{}/{}", i, options.simulation_steps)));
+			indicators::option::PostfixText(fmt::format("{}/{}", simulation_step, options.simulation_steps)));
 
 		// Get (x,y, theta) of all vehicles
 		
@@ -721,23 +730,53 @@ auto main(int argc, char** argv) -> int {
 		// std::for_each(std::begin(streetlamps), std::end(streetlamps), [&](const auto& lamp) {
 			// TODO: pick a better variable name
 		int j = 0;
-		for (const auto lamp : streetlamps) {
-			for (auto& car : cars) {
-				const int car_id = car.first;
-				const auto& car_data = car.second;
-				const double distance = std::hypot(car_data.x - lamp.lon, car_data.y - lamp.lat);
-				if (distance <= options.streetlamp_distance_threshold) {
-					// The car is close to the street lamp
-					// Turn on the street lamp
-					fmt::print("Car {} is close to street lamp {}\n", car_id, lamp.id);
-					// lamp.on = true;
-					// break;
-					streetlamp_ids_with_vehicles_nearby[j] = lamp.id;
-					j++;
+
+		const auto look_for_cars_close_to_streetlamps = [&](const auto start, const auto end) {
+			for (int idx = start; idx < end; ++idx) {
+				const auto lamp = streetlamps[idx];
+				for (auto& car : cars) {
+					const int car_id = car.first;
+					const auto& car_data = car.second;
+					const double distance = std::hypot(car_data.x - lamp.lon, car_data.y - lamp.lat);
+					if (distance <= options.streetlamp_distance_threshold) {
+						// The car is close to the street lamp
+						// Turn on the street lamp
+						fmt::print("Car {} is close to street lamp {}\n", car_id, lamp.id);
+						// lamp.on = true;
+						// break;
+						streetlamp_ids_with_vehicles_nearby[j] = lamp.id;
+						j++;
+					}
 				}
 			}
-		// });
-		}
+		};
+
+		pool.parallelize_loop(0, streetlamps.size(), look_for_cars_close_to_streetlamps, 10);
+
+		// This is O(MN) circa O(N^2)
+		// for (const auto lamp : streetlamps) {
+		// 	for (auto& car : cars) {
+		// 		const int car_id = car.first;
+		// 		const auto& car_data = car.second;
+		// 		const double distance = std::hypot(car_data.x - lamp.lon, car_data.y - lamp.lat);
+		// 		if (distance <= options.streetlamp_distance_threshold) {
+		// 			// The car is close to the street lamp
+		// 			// Turn on the street lamp
+		// 			fmt::print("Car {} is close to street lamp {}\n", car_id, lamp.id);
+		// 			// lamp.on = true;
+		// 			// break;
+		// 			streetlamp_ids_with_vehicles_nearby[j] = lamp.id;
+		// 			j++;
+		// 		}
+		// 	}
+		// // });
+		// }
+
+
+		const auto t_end = std::chrono::high_resolution_clock::now();
+		const auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t_end - t_start);
+		fmt::print("duration: {}\n", duration.count());
+
 
 		// Publish the data to clients
 		{
@@ -762,10 +801,7 @@ auto main(int argc, char** argv) -> int {
 
 
 
-		const auto t_end = std::chrono::high_resolution_clock::now();
-		const auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t_end - t_start);
-		fmt::print("duration: {}\n", duration.count());
-
+	
 		// TODO: preallocate some of the memory structures used in this block
 		{ // Publish the data to clients
 			json j;

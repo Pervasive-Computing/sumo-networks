@@ -53,6 +53,8 @@ find_package(cppzmq REQUIRED)
 list(APPEND external_library_targets cppzmq)
 find_package(tomlplusplus REQUIRED)
 list(APPEND external_library_targets tomlplusplus::tomlplusplus)
+find_package(bshoshany-thread-pool REQUIRED)
+list(APPEND external_library_targets bshoshany-thread-pool::bshoshany-thread-pool)
 
 message(STATUS "external_library_targets:")
 foreach(external_library_target ${external_library_targets})
