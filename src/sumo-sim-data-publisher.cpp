@@ -700,112 +700,66 @@ auto main(int argc, char** argv) -> int {
 	BS::thread_pool pool(n_threads_in_pool);
 	spdlog::info("Created thread pool with {} threads", pool.get_thread_count());
 
-	// TODO: figure out how to subscribe an extract data from the simulation
 	for (int simulation_step = 0; simulation_step < options.simulation_steps; ++simulation_step) {
+		// TODO: keep track of the accumelated time of the simulation
 		Simulation::step();
-		// Show step/total_steps instead of percent in progress bar
-		const double percent_done = static_cast<double>(simulation_step) / options.simulation_steps * 100.0;
-		bar.set_progress(percent_done);
-		bar.set_option(
+		{ // Update the progress bar
+			const double percent_done = static_cast<double>(simulation_step) / options.simulation_steps * 100.0;
+			bar.set_progress(percent_done);
+			bar.set_option(
 			indicators::option::PostfixText(fmt::format("{}/{}", simulation_step, options.simulation_steps)));
-
-		// Get (x,y, theta) of all vehicles
-		
-		const auto vehicles_ids = Vehicle::getIDList();
-
-		for (const auto& id : vehicles_ids) {
-			const int id_as_int = std::stoi(id);
-			auto& car = cars[id_as_int];
-
-			const auto	 position = Vehicle::getPosition(id);
-
-			car.x = position.x;
-			car.y = position.y;
-			car.heading = Vehicle::getAngle(id);
-			car.alive = true;
 		}
+		
+		{ // Get (x,y, theta) of all vehicles
+			const auto vehicles_ids = Vehicle::getIDList();
 
-		const auto t_start = std::chrono::high_resolution_clock::now();
-		// Check if any cars are close to a street lamp using parallelization
-		// std::for_each(std::begin(streetlamps), std::end(streetlamps), [&](const auto& lamp) {
-			// TODO: pick a better variable name
-		int j = 0;
+			for (const auto& id : vehicles_ids) {
+				const int id_as_int = std::stoi(id);
+				auto& car = cars[id_as_int];
+
+				const auto	 position = Vehicle::getPosition(id);
+
+				car.x = position.x;
+				car.y = position.y;
+				car.heading = Vehicle::getAngle(id);
+				car.alive = true;
+			}
+		}
+		
+		std::atomic<int> num_streetlamps_with_vehicles_nearby = 0;
+		// Check if any cars are close to a street lamp
+		// const auto t_start = std::chrono::high_resolution_clock::now();
 
 		const auto look_for_cars_close_to_streetlamps = [&](const auto start, const auto end) {
-			for (int idx = start; idx < end; ++idx) {
+			for (auto idx = start; idx < end; ++idx) {
 				const auto lamp = streetlamps[idx];
 				for (auto& car : cars) {
-					const int car_id = car.first;
+					// const int car_id = car.first;
 					const auto& car_data = car.second;
 					const double distance = std::hypot(car_data.x - lamp.lon, car_data.y - lamp.lat);
 					if (distance <= options.streetlamp_distance_threshold) {
 						// The car is close to the street lamp
 						// Turn on the street lamp
-						fmt::print("Car {} is close to street lamp {}\n", car_id, lamp.id);
+						// fmt::print("Car {} is close to street lamp {}\n", car_id, lamp.id);
 						// lamp.on = true;
 						// break;
-						streetlamp_ids_with_vehicles_nearby[j] = lamp.id;
-						j++;
+						streetlamp_ids_with_vehicles_nearby[num_streetlamps_with_vehicles_nearby] = lamp.id;
+						num_streetlamps_with_vehicles_nearby++;
 					}
 				}
 			}
 		};
+		// const auto t_end = std::chrono::high_resolution_clock::now();
+		// const auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t_end - t_start);
+		// fmt::print("duration: {}\n", duration.count());
 
-		pool.parallelize_loop(0, streetlamps.size(), look_for_cars_close_to_streetlamps, 10);
+		auto multi_future = pool.parallelize_loop(0, streetlamps.size(), look_for_cars_close_to_streetlamps, 10);
 
-		// This is O(MN) circa O(N^2)
-		// for (const auto lamp : streetlamps) {
-		// 	for (auto& car : cars) {
-		// 		const int car_id = car.first;
-		// 		const auto& car_data = car.second;
-		// 		const double distance = std::hypot(car_data.x - lamp.lon, car_data.y - lamp.lat);
-		// 		if (distance <= options.streetlamp_distance_threshold) {
-		// 			// The car is close to the street lamp
-		// 			// Turn on the street lamp
-		// 			fmt::print("Car {} is close to street lamp {}\n", car_id, lamp.id);
-		// 			// lamp.on = true;
-		// 			// break;
-		// 			streetlamp_ids_with_vehicles_nearby[j] = lamp.id;
-		// 			j++;
-		// 		}
-		// 	}
-		// // });
-		// }
-
-
-		const auto t_end = std::chrono::high_resolution_clock::now();
-		const auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t_end - t_start);
-		fmt::print("duration: {}\n", duration.count());
-
-
-		// Publish the data to clients
-		{
-			json array = json::array();
-			for (int idx = 0; idx < j; idx++) {
-				array.push_back(streetlamp_ids_with_vehicles_nearby[idx]);
-			}
-			// for (const auto lamp_id : streetlamp_ids_with_vehicles_nearby) {
-			// 	j.push_back(lamp_id);
-			// }
-
-			const std::vector<u8> v = json::to_cbor(array);
-
-			// Convert to std::string
-			const std::string payload(v.begin(), v.end());
-
-			const std::string topic = "streetlamps";
-
-			// Send the data to all clients
-			sock.send(zmq::buffer(topic + payload), zmq::send_flags::dontwait);
-		}
-
-
-
-	
 		// TODO: preallocate some of the memory structures used in this block
-		{ // Publish the data to clients
-			json j;
+		{ // Publish information about the position and heading of all active cars
+			json j; // { "1": { "x": 1, "y": 2, "heading": 3 }, "2": { "x": 1, "y": 2, "heading": 3 } }
 			// Find all cars that are alive and put them into a json object
+			// TODO: use designated initializers
 			for (auto& item : cars) {
 				Car& car = item.second;
 				if (! car.alive) {
@@ -827,6 +781,30 @@ auto main(int argc, char** argv) -> int {
 			// Send the data to all clients
 			sock.send(zmq::buffer(topic + payload), zmq::send_flags::dontwait);
 		}
+
+		// Wait for all threads in the thread pool to finish
+		// NOTE: We do this here after the code that generates the data of all alive cars, to have the 
+		// main thread do something while we wait for the other threads to finish
+		// This is better than calling .wait() right after the call to pool.parallelize_loop()
+		multi_future.wait();
+
+		
+		
+		{ // Publish information about which street lamps that have vehicles nearby
+			json array = json::array();
+			for (int idx = 0; idx < j; idx++) {
+				array.push_back(streetlamp_ids_with_vehicles_nearby[idx]);
+			}
+			// Serialize to CBOR encoding format
+			const std::vector<u8> v = json::to_cbor(array);
+			// Convert to std::string
+			const std::string payload(v.begin(), v.end());
+			const std::string topic = "streetlamps";
+			// Send the data to all clients
+			sock.send(zmq::buffer(topic + payload), zmq::send_flags::dontwait);
+		}
+
+		
 	}
 
 	indicators::show_console_cursor(true);
