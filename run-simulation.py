@@ -4,9 +4,10 @@ import argparse
 import os
 import subprocess
 import sys
-import time
-from dataclasses import asdict, dataclass
-from datetime import datetime
+
+# import time
+# from dataclasses import asdict, dataclass
+# from datetime import datetime
 from pathlib import Path
 from shutil import which
 
@@ -52,38 +53,41 @@ def main(argc: int, argv: list[str]) -> int:
         try:
             configuration = tomllib.load(file)
         except tomllib.TOMLDecodeError as e:
-            print(f"Cannot decode `{configuration_path}`: {e}")
+            print(f"Cannot decode `{configuration_path}`: {e}", file=sys.stderr)
             return 1
 
     sumo_sim_data_publisher_path = Path.cwd() / "build" / "sumo-sim-data-publisher"
     if not sumo_sim_data_publisher_path.exists():
-        print(f"Cannot find `{sumo_sim_data_publisher_path}`!")
-        print("Did you forget to build the project?")
+        print(f"Cannot find `{sumo_sim_data_publisher_path}`!", file=sys.stderr)
+        print("Did you forget to build the project?", file=sys.stderr)
         return 1
 
     # zellij_available: bool = which("zellij") is not None
     # inside_zellij: bool = os.environ.get("ZELLIJ") is not None
 
-    print("[1/2] Starting simulation")
-    sumo_cmd_args: list[str] = list(
-        map(
-            str,
-            [
-                sumo_cmd_path,
-                "-c",
-                configuration["sumo"]["sumocfg-path"],
-                "--remote-port",
-                str(configuration["sumo"]["port"]),
-            ],
+    if configuration["sumo"]["spawn"]["enabled"]:
+        print("Starting simulation")
+        sumo_cmd_args: list[str] = list(
+            map(
+                str,
+                [
+                    sumo_cmd_path,
+                    "-c",
+                    configuration["sumo"]["sumocfg-path"],
+                    "--remote-port",
+                    str(configuration["sumo"]["port"]),
+                ],
+            )
         )
-    )
 
-    if args.verbose:
-        print(f"{sumo_cmd_args = }")
+        if args.verbose:
+            print(f"{sumo_cmd_args = }")
 
-    p = subprocess.Popen(sumo_cmd_args)
+        sumo_subprocess = subprocess.Popen(sumo_cmd_args)
+    else:
+        print("Skipping simulation")
 
-    print("[2/2] Starting simulation data publisher")
+    print("Starting simulation data publisher")
     sumo_sim_data_publisher_args: list[str] = list(
         map(str, [sumo_sim_data_publisher_path])
     )
@@ -93,7 +97,7 @@ def main(argc: int, argv: list[str]) -> int:
 
     subprocess.run(sumo_sim_data_publisher_args)
 
-    p.wait()
+    sumo_subprocess.wait()
 
     return 0
 

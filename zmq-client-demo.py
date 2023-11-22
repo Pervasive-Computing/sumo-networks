@@ -1,3 +1,5 @@
+#!/usr/bin/env -S pixi run python3
+
 import os
 import sys
 import time
@@ -27,7 +29,9 @@ def main(argc: int, argv: list[str]) -> int:
     print(f"Connecting to server on port {args.port}...")
     subscriber = context.socket(zmq.SUB)
     subscriber.connect(f"tcp://localhost:{args.port}")
-    subscriber.setsockopt(zmq.SUBSCRIBE, b"")
+    # topic: bytes = b"cars"
+    topic: bytes = b"streetlamps"
+    subscriber.setsockopt(zmq.SUBSCRIBE, topic)
     print("Connected!")
 
     n_messages_received: int = 0
@@ -35,8 +39,9 @@ def main(argc: int, argv: list[str]) -> int:
         while True:
             message = subscriber.recv()
             n_messages_received += 1
-            data = cbor2.loads(message)
-            clear_screen()
+            # print(f"{message = }")
+            data = cbor2.loads(message[len(topic):]) # skip the first 4 bytes as they are the topic "cars"
+            # clear_screen()
             print(f"Received message #{n_messages_received}: {data}")
             # time.sleep(0.1)
     except KeyboardInterrupt:

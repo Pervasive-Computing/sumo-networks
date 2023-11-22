@@ -1,8 +1,3 @@
-// #if defined (__linux__) || defined(__unix__)
-// #include <unistd.h>
-// #elif defined(_WIN32)
-// #include <windows.h>
-// #endif
 #include <algorithm>
 #include <chrono>
 using namespace std::chrono_literals;
@@ -16,6 +11,7 @@ using namespace std::chrono_literals;
 #include <optional>
 #include <string>
 #include <string_view>
+#include <execution>
 using namespace std::string_view_literals;
 #include <thread>
 #include <vector>
@@ -611,17 +607,20 @@ auto main(int argc, char** argv) -> int {
 		return 1;
 	}
 
-	phmap::flat_hash_map<std::string, Car> cars;
+	// phmap::flat_hash_map<std::string, Car> cars;
+	phmap::flat_hash_map<int, Car> cars;
 
 	const auto vehicles = route_files_xml_doc.child("routes").children("vehicle");
 	for (const auto& vehicle : vehicles) {
-		const std::string vehicle_id = vehicle.attribute("id").as_string();
+		// const std::string vehicle_id = vehicle.attribute("id").as_string();
+		const auto vehicle_id = vehicle.attribute("id").as_int();
 		cars[vehicle_id] = Car {};
 	}
 
 	
 	zmq::context_t	  zmq_ctx;
 	zmq::socket_t	  sock(zmq_ctx, zmq::socket_type::pub);
+	// FIXME: do not use tcp maybe ipc://
 	const std::string addr = fmt::format("tcp://*:{}", options.port);
 	sock.bind(addr);
 	spdlog::info("Bound zmq PUB socket to {}", addr);
@@ -689,6 +688,8 @@ auto main(int argc, char** argv) -> int {
 			std::vector<indicators::FontStyle> {indicators::FontStyle::bold}}};
 
 
+	// Preallocate memory for the streetlamp_ids_with_vehicles_nearby vector
+	auto streetlamp_ids_with_vehicles_nearby = std::vector<std::int64_t>(streetlamps.size(), 0);
 
 	// TODO: figure out how to subscribe an extract data from the simulation
 	for (int i = 0; i < options.simulation_steps; ++i) {
@@ -700,10 +701,12 @@ auto main(int argc, char** argv) -> int {
 			indicators::option::PostfixText(fmt::format("{}/{}", i, options.simulation_steps)));
 
 		// Get (x,y, theta) of all vehicles
-		auto vehicles_ids = Vehicle::getIDList();
+		
+		const auto vehicles_ids = Vehicle::getIDList();
 
 		for (const auto& id : vehicles_ids) {
-			auto& car = cars[id];
+			const int id_as_int = std::stoi(id);
+			auto& car = cars[id_as_int];
 
 			const auto	 position = Vehicle::getPosition(id);
 
@@ -713,21 +716,55 @@ auto main(int argc, char** argv) -> int {
 			car.alive = true;
 		}
 
-		// Check if any cars are close to a street lamp
-		// for (auto& lamp : streetlamps) {
-		// 	for (auto& car : cars) {
-		// 		const auto& car_id = car.first;
-		// 		const auto& car_data = car.second;
-		// 		const double distance = std::hypot(car_data.x - lamp.lon, car_data.y - lamp.lat);
-		// 		if (distance <= options.streetlamp_distance_threshold) {
-		// 			// The car is close to the street lamp
-		// 			// Turn on the street lamp
-		// 			fmt::print("Car {} is close to street lamp {}\n", car_id, lamp.id);
-		// 			// lamp.on = true;
-		// 			// break;
-		// 		}
-		// 	}
-		// }
+		const auto t_start = std::chrono::high_resolution_clock::now();
+		// Check if any cars are close to a street lamp using parallelization
+		// std::for_each(std::begin(streetlamps), std::end(streetlamps), [&](const auto& lamp) {
+			// TODO: pick a better variable name
+		int j = 0;
+		for (const auto lamp : streetlamps) {
+			for (auto& car : cars) {
+				const int car_id = car.first;
+				const auto& car_data = car.second;
+				const double distance = std::hypot(car_data.x - lamp.lon, car_data.y - lamp.lat);
+				if (distance <= options.streetlamp_distance_threshold) {
+					// The car is close to the street lamp
+					// Turn on the street lamp
+					fmt::print("Car {} is close to street lamp {}\n", car_id, lamp.id);
+					// lamp.on = true;
+					// break;
+					streetlamp_ids_with_vehicles_nearby[j] = lamp.id;
+					j++;
+				}
+			}
+		// });
+		}
+
+		// Publish the data to clients
+		{
+			json array = json::array();
+			for (int idx = 0; idx < j; idx++) {
+				array.push_back(streetlamp_ids_with_vehicles_nearby[idx]);
+			}
+			// for (const auto lamp_id : streetlamp_ids_with_vehicles_nearby) {
+			// 	j.push_back(lamp_id);
+			// }
+
+			const std::vector<u8> v = json::to_cbor(array);
+
+			// Convert to std::string
+			const std::string payload(v.begin(), v.end());
+
+			const std::string topic = "streetlamps";
+
+			// Send the data to all clients
+			sock.send(zmq::buffer(topic + payload), zmq::send_flags::dontwait);
+		}
+
+
+
+		const auto t_end = std::chrono::high_resolution_clock::now();
+		const auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t_end - t_start);
+		fmt::print("duration: {}\n", duration.count());
 
 		// TODO: preallocate some of the memory structures used in this block
 		{ // Publish the data to clients
@@ -739,8 +776,9 @@ auto main(int argc, char** argv) -> int {
 					continue;
 				}
 				car.alive = false; // Reset the alive flag
-				const std::string& vehicle_id = item.first;
-				j[vehicle_id] = car.to_json();
+				// const std::string& vehicle_id = item.first;
+				const int vehicle_id = item.first;
+				j[std::to_string(vehicle_id)] = car.to_json();
 			}
 
 			// Serialize to CBOR encoding format
@@ -748,9 +786,10 @@ auto main(int argc, char** argv) -> int {
 
 			// Convert to std::string
 			const std::string payload(v.begin(), v.end());
+			const std::string topic = "cars";
 
 			// Send the data to all clients
-			sock.send(zmq::buffer(payload), zmq::send_flags::dontwait);
+			sock.send(zmq::buffer(topic + payload), zmq::send_flags::dontwait);
 		}
 	}
 

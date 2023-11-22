@@ -1,5 +1,6 @@
 verbose = false
 port = 12000
+publish-rate = 10 # in Hz
 
 [sumo]
 port = 10000
@@ -12,6 +13,7 @@ enabled = true
 gui = false
 
 [sumo.streetlamps]
-distance-threshold = 10
+distance-threshold = 50 # in meters
 
-
+[topics.cars]
+name = "cars"
