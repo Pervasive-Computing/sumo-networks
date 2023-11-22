@@ -1,0 +1,16 @@
+<configuration>
+    <input>
+        <net-file value="katrinebjerg-lamp.net.xml"/>
+        <route-files value="katrinebjerg-lamp.rou.xml"/>
+        <additional-files value="katrinebjerg-lamp.poly.xml"/>
+    </input>
+    <time>
+        <begin value="0"/>
+        <step-length value="0.01"/>
+        <end value="100000"/>
+    </time>
+    <gui_only>
+        <delay value="80"/>
+        <start value="true"/>
+    </gui_only>
+</configuration>
