@@ -16,6 +16,7 @@ cppzmq/4.10.0
 # protobuf/3.21.12
 # flann/1.9.2
 nanoflann/1.5.0
+tomlplusplus/3.4.0
 
 [generators]
 CMakeToolchain

@@ -51,6 +51,8 @@ find_package(indicators REQUIRED)
 list(APPEND external_library_targets indicators::indicators)
 find_package(cppzmq REQUIRED)
 list(APPEND external_library_targets cppzmq)
+find_package(tomlplusplus REQUIRED)
+list(APPEND external_library_targets tomlplusplus::tomlplusplus)
 
 message(STATUS "external_library_targets:")
 foreach(external_library_target ${external_library_targets})

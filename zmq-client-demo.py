@@ -11,6 +11,10 @@ try:
 except ImportError or ModuleNotFoundError:
     pass
 
+def clear_screen() -> None:
+    # printf "\033c"
+    print("\033c", file=sys.stdout, flush=False)
+
 def main(argc: int, argv: list[str]) -> int:
     argv_parser = argparse.ArgumentParser(prog=os.path.basename(__file__).removesuffix(".py"),
                                          description="ZeroMQ client demo")
@@ -26,12 +30,15 @@ def main(argc: int, argv: list[str]) -> int:
     subscriber.setsockopt(zmq.SUBSCRIBE, b"")
     print("Connected!")
 
+    n_messages_received: int = 0
     try:
         while True:
             message = subscriber.recv()
+            n_messages_received += 1
             data = cbor2.loads(message)
-            print(f"Received message: {data}")
-            time.sleep(0.1)
+            clear_screen()
+            print(f"Received message #{n_messages_received}: {data}")
+            # time.sleep(0.1)
     except KeyboardInterrupt:
         print("Interrupted!")
     finally:

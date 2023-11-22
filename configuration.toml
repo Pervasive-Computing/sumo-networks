@@ -1,0 +1,17 @@
+verbose = false
+port = 12000
+
+[sumo]
+port = 10000
+sumocfg-path = "katrinebjerg-lamp/katrinebjerg-lamp.sumocfg"
+osm-path = "katrinebjerg-lamp/katrinebjerg-lamp.osm"
+simulation-steps = 10000
+
+[sumo.spawn]
+enabled = true
+gui = false
+
+[sumo.streetlamps]
+distance-threshold = 10
+
+

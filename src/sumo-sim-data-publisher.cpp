@@ -1,3 +1,8 @@
+// #if defined (__linux__) || defined(__unix__)
+// #include <unistd.h>
+// #elif defined(_WIN32)
+// #include <windows.h>
+// #endif
 #include <algorithm>
 #include <chrono>
 using namespace std::chrono_literals;
@@ -7,10 +12,15 @@ using namespace std::chrono_literals;
 #include <functional>
 #include <iostream>
 #include <mutex>
+#include <numeric>
 #include <optional>
 #include <string>
+#include <string_view>
+using namespace std::string_view_literals;
 #include <thread>
 #include <vector>
+
+// #include <immintrin.h> // SIMD intrinsics
 
 // 3rd party libraries
 #include <argparse/argparse.hpp>
@@ -24,11 +34,11 @@ using namespace nlohmann::literals; // for ""_json
 #include <pugixml.hpp>
 #include <spdlog/spdlog.h>
 #include <tl/expected.hpp>
-// #include <uWebSockets/App.h>
 // #include <indicators/progress_bar.hpp>
 #include <indicators/block_progress_bar.hpp>
 
 #include <zmq.hpp>
+#include <toml.hpp>
 
 #include <libsumo/libtraci.h>
 
@@ -36,9 +46,6 @@ using namespace nlohmann::literals; // for ""_json
 #include "debug-macro.hpp"
 #include "pretty-printers.hpp"
 #include "streetlamp.hpp"
-
-
-// #include "cars.pb.h"
 
 using namespace libtraci;
 
@@ -55,57 +62,6 @@ using i64 = std::int64_t;
 using f32 = float;
 using f64 = double;
 
-/**
- * Calculates the haversine distance between two points on the Earth's surface expressed in lon/lat coordinates.
- * @note https://en.wikipedia.org/wiki/Haversine_formula
- * @note https://stackoverflow.com/questions/639695/how-to-convert-latitude-or-longitude-to-meters/11172685#11172685
- * 
- * @param lon1 The longitude of the first point in degrees.
- * @param lat1 The latitude of the first point in degrees.
- * @param lon2 The longitude of the second point in degrees.
- * @param lat2 The latitude of the second point in degrees.
- * @return The haversine distance between the two points in meters.
- */
-inline auto haversine(const double lon1, const double lat1, const double lon2, const double lat2) -> double {
-	constexpr double earth_radius = 6371.0; // Earth radius in kilometers
-	constexpr double degrees_to_radians = M_PI / 180.0;
-
-	// Convert latitude and longitude from degrees to radians
-	const double lon1_rad = lon1 * degrees_to_radians;
-	const double lat1_rad = lat1 * degrees_to_radians;
-	const double lon2_rad = lon2 * degrees_to_radians;
-	const double lat2_rad = lat2 * degrees_to_radians;
-
-	// Calculate the differences between the latitudes and longitudes
-	const double delta_lon = lon2_rad - lon1_rad;
-	const double delta_lat = lat2_rad - lat1_rad;
-
-	// Calculate the square of half the chord length between the points
-	const double a = std::sin(delta_lat / 2.0) * std::sin(delta_lat / 2.0) +
-					 std::cos(lat1_rad) * std::cos(lat2_rad) *
-					 std::sin(delta_lon / 2.0) * std::sin(delta_lon / 2.0);
-
-	// Calculate the angular distance in radians
-	const double c = 2.0 * std::atan2(std::sqrt(a), std::sqrt(1.0 - a));
-
-	// Calculate the distance in meters
-	const double distance = earth_radius * c * 1000.0;
-
-	return distance;
-}
-
-// [[nodiscard]] auto walkdir(
-// 	const std::string& dir, const std::function<bool(const std::filesystem::directory_entry&)>& filter =
-// 								[](const auto&) { return true; }) -> std::vector<std::string> {
-// 	std::vector<std::string> files;
-// 	for (const auto& entry : std::filesystem::directory_iterator(dir)) {
-// 		if (! filter(entry)) {
-// 			continue;
-// 		}
-// 		files.push_back(entry.path().string());
-// 	}
-// 	return files;
-// }
 
 // <configuration>
 //     <input>
@@ -125,13 +81,13 @@ inline auto haversine(const double lon1, const double lat1, const double lon2, c
 // </configuration>
 
 
-static inline void show_console_cursor(bool const show) {
-  std::fputs(show ? "\033[?25h" : "\033[?25l", stdout);
-}
+// static inline void show_console_cursor(bool const show) {
+//   std::fputs(show ? "\033[?25h" : "\033[?25l", stdout);
+// }
 
-static inline void erase_line() {
-  std::fputs("\r\033[K", stdout);
-}
+// static inline void erase_line() {
+//   std::fputs("\r\033[K", stdout);
+// }
 
 struct SumoConfiguration {
 	std::filesystem::path net_file;
@@ -212,12 +168,35 @@ auto get_sumo_home_directory_path() -> tl::expected<std::filesystem::path, get_s
 
 struct ProgramOptions {
 	u16		 port;
+	bool verbose = false;
 	u16		 sumo_port;
 	i32		 simulation_steps;
 	std::filesystem::path sumocfg_path;
 	std::filesystem::path osm_path;
 	// bool	 gui = true;
-	bool verbose = false;
+	bool use_sumo_gui = false;
+	bool spawn_sumo = false;
+	i32 streetlamp_distance_threshold;
+
+	static auto print_toml_schema() -> void {
+		fmt::print(R"(
+verbose = false # <bool>
+port = 10001 # <u16>
+
+[sumo]
+port = 10000 # <u16>
+sumocfg-path = "katrinebjerg-lamp/katrinebjerg-lamp.sumocfg" # <string>
+osm-path = "katrinebjerg-lamp/katrinebjerg-lamp.osm" # <string>
+simulation-steps = 10000 # <unsigned integer>
+
+[sumo.spawn]
+enabled = true # <bool>
+gui = false # <bool>
+
+[sumo.streetlamps]
+distance-threshold = 10 # <unsigned integer>
+)");
+	}
 };
 
 auto pprint(const ProgramOptions& options) -> void {
@@ -234,6 +213,9 @@ auto pprint(const ProgramOptions& options) -> void {
 				 pformat(options.osm_path));
 	// fmt::println("{}{}.gui{} = {},", indent, markup::bold, reset, pformat(options.gui));
 	fmt::println("{}{}.verbose{} = {},", indent, markup::bold, reset, pformat(options.verbose));
+	fmt::println("{}{}.use_sumo_gui{} = {},", indent, markup::bold, reset, pformat(options.use_sumo_gui));
+	fmt::println("{}{}.spawn_sumo{} = {},", indent, markup::bold, reset, pformat(options.spawn_sumo));
+	fmt::println("{}{}.streetlamp_distance_threshold{} = {},", indent, markup::bold, reset, pformat(options.streetlamp_distance_threshold));
 	fmt::println("}};");
 }
 
@@ -336,30 +318,240 @@ auto parse_args(argparse::ArgumentParser argv_parser, int argc, char** argv)
 
 	return ProgramOptions {
 		.port = static_cast<u16>(port),
+		.verbose = argv_parser.get<bool>("verbose"),
 		.sumo_port = static_cast<u16>(sumo_port),
 		.simulation_steps = simulation_steps,
 		.sumocfg_path = sumocfg_path,
 		.osm_path = osm_path,
 		// .gui = argv_parser.get<bool>("gui"),
-		.verbose = argv_parser.get<bool>("verbose"),
+	};
+}
+
+auto between(const int x, const int min, const int max) -> bool {
+	return min <= x && x <= max;
+}
+
+// verbose = false
+// port = 10001
+
+// [sumo]
+// port = 10000
+// sumocfg-path = "katrinebjerg-lamp/katrinebjerg-lamp.sumocfg"
+// osm-path = "katrinebjerg-lamp/katrinebjerg-lamp.osm"
+// simulation-steps = 10000
+
+// [sumo.spawn]
+// enabled = true
+// gui = false
+
+// /**
+//  * Checks if the current program is running in the Windows Subsystem for Linux (WSL) environment.
+//  * 
+//  * @return true if running in WSL, false otherwise.
+//  */
+// auto in_wsl() -> bool {
+// 	static std::optional<bool> in_wsl_cache = std::nullopt;
+// 	if (!in_wsl_cache.has_value()) {
+// 		const auto proc_version = std::filesystem::path("/proc/version");
+// 		if (!std::filesystem::exists(proc_version)) {
+// 			// /proc/version does not exist, so we are not in WSL
+// 			in_wsl_cache = false;
+// 		} else {
+// 			// Open the file and search for the word "microsoft" case insensitively
+// 			std::ifstream file(proc_version);
+// 			std::string   line;
+// 			while (std::getline(file, line)) {
+// 				std::transform(line.begin(), line.end(), line.begin(), ::tolower);
+// 				if (line.find("microsoft") != std::string::npos) {
+// 					in_wsl_cache = true;
+// 					break;
+// 				}
+// 			}
+// 			in_wsl_cache = false;
+// 		}
+// 	}
+// 	return *in_wsl_cache;
+// }
+
+
+// auto which(const std::string& program) -> std::vector<std::filesystem::path> {
+// 	std::vector<std::filesystem::path> result;
+// 	const std::string                   path_env = std::getenv("PATH");
+// 	const std::string                   path_separator = in_wsl() ? ":" : ";";
+// 	const std::vector<std::string>      path_dirs = split(path_env, path_separator);
+// 	for (const auto& dir : path_dirs) {
+// 		const std::filesystem::path path = dir;
+// 		const std::filesystem::path program_path = path / program;
+// 		if (std::filesystem::exists(program_path)) {
+// 			result.push_back(program_path);
+// 		}
+// 	}
+// 	return result;
+// }
+
+// auto start_sumo_process(const std::vector<std::string_view>& args, const bool gui) -> bool {
+// 	#if defined(__linux__) || defined(__unix__)
+// 		// Linux or Unix like operating system (e.g. MacOS)
+// 		const std::string sumo_executable = gui ? "sumo-gui" : "sumo";
+		
+// 		if (gui) {
+// 			// Use execfe to start the sumo-gui process
+// 			execfe("sumo-gui", args);
+// 		} else {
+// 			// Use execfe to start the sumo process
+// 			execfe("sumo", args);
+// 		}
+// 	#elif defined(_WIN32)
+// 		// Windows
+// 		STARTUPINFO si{};
+// 		PROCESS_INFORMATION pi{};
+// 		std::string command = "sumo";
+// 		if (gui) {
+// 			command += "-gui";
+// 		}
+// 		std::string commandLine;
+// 		for (const auto& arg : args) {
+// 			commandLine += arg;
+// 			commandLine += " ";
+// 		}
+// 		if (CreateProcess(nullptr, commandLine.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &si, &pi)) {
+// 			CloseHandle(pi.hThread);
+// 			CloseHandle(pi.hProcess);
+// 		} else {
+// 			// Failed to start the sumo process
+// 			return false;
+// 		}
+// 	#else
+// 		// Unsupported operating system
+// 		return false;
+// 	#endif
+
+// 	return true;
+// }
+
+
+auto parse_configuration(const std::filesystem::path& configuration_file_path) -> ProgramOptions {
+	// const auto config = [&]() {
+	// 	try {
+	// 		const auto config = toml::parse("config.toml");
+	// 		return config;
+	// 	}
+	// 	catch (const toml::parse_error& err) {
+	// 		std::cerr << "Parsing error: " << err << "\n";
+	// 		std::exit(1);
+	// 		// Handle error...
+	// 	}
+	// }();
+	
+
+	const auto config = toml::parse_file(configuration_file_path.string());
+	const auto port = config["port"].value_or(10001);
+	if (!between(port, 0, std::numeric_limits<u16>::max())) {
+		spdlog::error("port must be between 0 and {}", std::numeric_limits<u16>::max());
+		std::exit(1);
+	}
+
+	const auto sumo_port = config["sumo"]["port"].value_or(10000);
+	if (!between(sumo_port, 0, std::numeric_limits<u16>::max())) {
+		spdlog::error("sumo.port must be between 0 and {}", std::numeric_limits<u16>::max());
+		std::exit(1);
+	}
+
+	const auto sumocfg_path = config["sumo"]["sumocfg-path"].value_or(""sv);
+	if (sumocfg_path.empty()) {
+		spdlog::error("sumo.sumocfg-path must be set");
+		std::exit(1);
+	}
+
+	// Check that the sumocfg file exists
+	if (! std::filesystem::exists(sumocfg_path)) {
+		spdlog::error("SUMO configuration file not found: {}", sumocfg_path);
+		std::exit(1);
+	}
+
+	const auto osm_path = config["sumo"]["osm-path"].value_or(""sv);
+	if (osm_path.empty()) {
+		spdlog::error("sumo.osm-path must be set");
+		std::exit(1);
+	}
+
+	// Check that the osm file exists
+	if (! std::filesystem::exists(osm_path)) {
+		spdlog::error("{}:{} OSM file not found: {}", __FILE__, __LINE__, osm_path);
+		std::exit(1);
+	}
+
+	const auto simulation_steps = config["sumo"]["simulation-steps"].value_or(10000);
+	if (simulation_steps <= 0) {
+		spdlog::error("sumo.simulation-steps must be positive");
+		std::exit(1);
+	}
+
+	const bool use_sumo_gui = config["sumo"]["spawn"]["gui"].value_or(false);
+	const bool spawn_sumo = config["sumo"]["spawn"]["enabled"].value_or(false);
+	if (use_sumo_gui && !spawn_sumo) {
+		spdlog::error("sumo.spawn.gui is true, but sumo.spawn.enabled is false");
+		std::exit(1);
+	}
+
+	const i32 streetlamp_distance_threshold = config["sumo"]["streetlamps"]["distance-threshold"].value_or(10);
+
+	if (streetlamp_distance_threshold <= 0) {
+		spdlog::error("sumo.streetlamps.distance-threshold must be positive");
+		std::exit(1);
+	}
+
+	const bool verbose = config["verbose"].value_or(false);
+	if (verbose) {
+		std::cout << toml::json_formatter{ config } << "\n";
+	}
+
+	return ProgramOptions {
+		.port = static_cast<u16>(port),
+		.verbose = verbose,
+		.sumo_port = static_cast<u16>(sumo_port),
+		.simulation_steps = simulation_steps,
+		.sumocfg_path = std::filesystem::absolute(sumocfg_path),
+		.osm_path = std::filesystem::absolute(osm_path),
+		.use_sumo_gui = use_sumo_gui,
+		.spawn_sumo = spawn_sumo,
+		.streetlamp_distance_threshold = streetlamp_distance_threshold,
 	};
 }
 
 
 auto main(int argc, char** argv) -> int {
+	const auto configuration_file_path = std::filesystem::path("configuration.toml");
+	if (! std::filesystem::exists(configuration_file_path)) {
+		spdlog::error("Configuration file not found: {}", configuration_file_path.string());
+		std::exit(1);
+	}
+	// const auto config = toml::parse_file("configuration.toml");
+	// you can also iterate more 'traditionally' using a ranged-for
+		// get key-value pairs
+	// std::string_view library_name = config["library"]["name"].value_or(""sv);
+	// std::string_view library_author = config["library"]["authors"][0].value_or(""sv);
+	// int64_t depends_on_cpp_version = config["dependencies"]["cpp"].value_or(0);
+	// fmt::print("library_name := {}\n", library_name);
+	// fmt::print("library_author := {}\n", library_author);
+	// fmt::print("depends_on_cpp_version := {}\n", depends_on_cpp_version);
+	
 	const auto argv_parser = create_argv_parser();
 	const auto print_help = [&]() -> void {
 		std::cerr << argv_parser;
 	};
-	const auto options = parse_args(argv_parser, argc, argv)
-							 .map_error([&](const auto& err) {
-								 spdlog::error("{}", err);
-								 print_help();
-								 std::exit(2);
-							 })
-							 .value();
+	const auto options = parse_configuration(configuration_file_path);
+	// const auto options = parse_args(argv_parser, argc, argv)
+	// 						 .map_error([&](const auto& err) {
+	// 							 spdlog::error("{}", err);
+	// 							 print_help();
+	// 							 std::exit(2);
+	// 						 })
+							//  .value();
 
 	pprint(options);
+
+	// ProgramOptions::print_toml_schema();
 
 	const auto sumo_home_path = [&]() {
 		auto result = get_sumo_home_directory_path();
@@ -382,7 +574,7 @@ auto main(int argc, char** argv) -> int {
 		}
 	}();
 
-	const std::filesystem::path cwd = std::filesystem::current_path();
+	const auto cwd = std::filesystem::current_path();
 
 	if (options.verbose) {
 		spdlog::debug("cwd: {}", cwd.string());
@@ -433,8 +625,8 @@ auto main(int argc, char** argv) -> int {
 	const std::string addr = fmt::format("tcp://*:{}", options.port);
 	sock.bind(addr);
 	spdlog::info("Bound zmq PUB socket to {}", addr);
-	const std::string_view m = "Hello, world";
-	sock.send(zmq::buffer(m));
+	// const std::string_view m = "Hello, world";
+	// sock.send(zmq::buffer(m));
 
 	spdlog::info("Found {} vehicles in {}", cars.size(), sumocfg.route_files.string());
 	const int num_retries_sumo_sim_connect = 100;
@@ -444,7 +636,7 @@ auto main(int argc, char** argv) -> int {
 	auto streetlamps = extract_streetlamps_from_osm(options.osm_path)
 								 .map_error([](const auto& err) {
 									if (err == extract_streetlamps_from_osm_error::file_not_found) {
-										spdlog::error("OSM file not found");
+										spdlog::error("{}:{} OSM file not found", __FILE__, __LINE__);
 									} else if (err == extract_streetlamps_from_osm_error::xml_parse_error) {
 										spdlog::error("Failed to parse OSM file");
 									}
@@ -461,9 +653,6 @@ auto main(int argc, char** argv) -> int {
 	// std::vector<std::thread> threads;
 	// threads.reserve(n_threads);
 
-
-
-	// AHHH
 	// Change each street lamp's lon/lat into x/y
 	// We only need to do this once, as the street lamps are static
 	// We need to do this since the OpenStreetMap file contains lon/lat coordinates of the street lamps
@@ -476,13 +665,13 @@ auto main(int argc, char** argv) -> int {
 		lamp.lat = geo.y;
 	}
 
-	std::for_each(std::begin(streetlamps), std::end(streetlamps), [](const auto& lamp) {
-		pprint(lamp);
-	});
+	// std::for_each(std::begin(streetlamps), std::end(streetlamps), [](const auto& lamp) {
+	// 	pprint(lamp);
+	// });
 
 	spdlog::info("streetlamps.size(): {}", streetlamps.size());
 
-	spdlog::info("dt: {}", dt);
+	// spdlog::info("dt: {}", dt);
 
 	// Hide cursor
 	indicators::show_console_cursor(false);
@@ -506,9 +695,9 @@ auto main(int argc, char** argv) -> int {
 		Simulation::step();
 		// Show step/total_steps instead of percent in progress bar
 		const double percent_done = static_cast<double>(i) / options.simulation_steps * 100.0;
-		// bar.set_progress(percent_done);
-		// bar.set_option(
-		// 	indicators::option::PostfixText(fmt::format("{}/{}", i, options.simulation_steps)));
+		bar.set_progress(percent_done);
+		bar.set_option(
+			indicators::option::PostfixText(fmt::format("{}/{}", i, options.simulation_steps)));
 
 		// Get (x,y, theta) of all vehicles
 		auto vehicles_ids = Vehicle::getIDList();
@@ -517,33 +706,41 @@ auto main(int argc, char** argv) -> int {
 			auto& car = cars[id];
 
 			const auto	 position = Vehicle::getPosition(id);
-			// const auto geo = Simulation::convertGeo(position.x, position.y);
-			// fmt::println("geo.x = {}, geo.y = {}", geo.x, geo.y);
-			// const auto lat = Vehicle::getLatitude(id);
-			// const double lat = geo.y;
-			// const double lon = geo.x;
-			// TODO: convert the lamps lon/lat into x/y once in the preprocessing step
-
-			const double heading = Vehicle::getAngle(id);
 
 			car.x = position.x;
 			car.y = position.y;
-			car.heading = heading;
+			car.heading = Vehicle::getAngle(id);
 			car.alive = true;
 		}
+
+		// Check if any cars are close to a street lamp
+		// for (auto& lamp : streetlamps) {
+		// 	for (auto& car : cars) {
+		// 		const auto& car_id = car.first;
+		// 		const auto& car_data = car.second;
+		// 		const double distance = std::hypot(car_data.x - lamp.lon, car_data.y - lamp.lat);
+		// 		if (distance <= options.streetlamp_distance_threshold) {
+		// 			// The car is close to the street lamp
+		// 			// Turn on the street lamp
+		// 			fmt::print("Car {} is close to street lamp {}\n", car_id, lamp.id);
+		// 			// lamp.on = true;
+		// 			// break;
+		// 		}
+		// 	}
+		// }
 
 		// TODO: preallocate some of the memory structures used in this block
 		{ // Publish the data to clients
 			json j;
 			// Find all cars that are alive and put them into a json object
-			for (const auto& item : cars) {
-				const Car& car = item.second;
+			for (auto& item : cars) {
+				Car& car = item.second;
 				if (! car.alive) {
 					continue;
 				}
+				car.alive = false; // Reset the alive flag
 				const std::string& vehicle_id = item.first;
-				const auto		   car_as_json = car.to_json();
-				j[vehicle_id] = car_as_json;
+				j[vehicle_id] = car.to_json();
 			}
 
 			// Serialize to CBOR encoding format
