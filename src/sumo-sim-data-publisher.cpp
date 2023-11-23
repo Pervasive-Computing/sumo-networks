@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cmath>
 #include <chrono>
 using namespace std::chrono_literals;
 #include <cmath>
@@ -693,6 +694,9 @@ auto main(int argc, char** argv) -> int {
 	BS::thread_pool pool(n_threads_in_pool);
 	spdlog::info("Created thread pool with {} threads", pool.get_thread_count());
 
+	const auto streetlamp_distance_threshold_doubled = std::pow(options.streetlamp_distance_threshold, 2);
+	// TODO: detect signed overflow
+
 	for (int simulation_step = 0; simulation_step < options.simulation_steps; ++simulation_step) {
 		// TODO: keep track of the accumelated time of the simulation
 		const auto t_start = std::chrono::high_resolution_clock::now();
@@ -717,16 +721,18 @@ auto main(int argc, char** argv) -> int {
 		
 		std::atomic<int> num_streetlamps_with_vehicles_nearby = 0;
 		// Check if any cars are close to a street lamp
-		// const auto t_start = std::chrono::high_resolution_clock::now();
-
 		const auto look_for_cars_close_to_streetlamps = [&](const auto start, const auto end) {
 			for (auto idx = start; idx < end; ++idx) {
 				const auto lamp = streetlamps[idx];
-				for (auto& car : cars) {
+				// for (auto& car : cars) {
+				for (const auto& [_,car] : cars) {
 					// const int car_id = car.first;
-					const auto& car_data = car.second;
+					// const auto& car_data = car.second;
 					// TODO PERF: use squared distance instead of distance to avoid the sqrt call
-					const double distance = std::hypot(car_data.x - lamp.lon, car_data.y - lamp.lat);
+					const double distance (car.x - lamp.lon) * (car.x - lamp.lon) + (car.y - lamp.lat) * (car.y - lamp.lat);
+					// const double distance = std::hypot(car.x - lamp.lon, car.y - lamp.lat);
+
+					// streetlamp_distance_threshold_doubled
 					if (distance <= options.streetlamp_distance_threshold) {
 						// The car is close to the street lamp
 						// Turn on the street lamp
