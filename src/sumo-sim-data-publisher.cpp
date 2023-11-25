@@ -346,7 +346,7 @@ auto between(const int x, const int min, const int max) -> bool {
 
 // /**
 //  * Checks if the current program is running in the Windows Subsystem for Linux (WSL) environment.
-//  * 
+//  *
 //  * @return true if running in WSL, false otherwise.
 //  */
 // auto in_wsl() -> bool {
@@ -393,7 +393,7 @@ auto between(const int x, const int min, const int max) -> bool {
 // 	#if defined(__linux__) || defined(__unix__)
 // 		// Linux or Unix like operating system (e.g. MacOS)
 // 		const std::string sumo_executable = gui ? "sumo-gui" : "sumo";
-		
+
 // 		if (gui) {
 // 			// Use execfe to start the sumo-gui process
 // 			execfe("sumo-gui", args);
@@ -430,7 +430,8 @@ auto between(const int x, const int min, const int max) -> bool {
 // }
 
 
-auto parse_configuration(const std::filesystem::path& configuration_file_path) -> ProgramOptions {
+// auto parse_configuration(const std::filesystem::path& configuration_file_path) -> ProgramOptions {
+auto parse_configuration(const toml::parse_result& config) -> ProgramOptions {
 	// const auto config = [&]() {
 	// 	try {
 	// 		const auto config = toml::parse("config.toml");
@@ -442,9 +443,9 @@ auto parse_configuration(const std::filesystem::path& configuration_file_path) -
 	// 		// Handle error...
 	// 	}
 	// }();
-	
 
-	const auto config = toml::parse_file(configuration_file_path.string());
+
+	// const auto config = toml::parse_file(configuration_file_path.string());
 	const auto port = config["port"].value_or(10001);
 	if (!between(port, 0, std::numeric_limits<u16>::max())) {
 		spdlog::error("port must be between 0 and {}", std::numeric_limits<u16>::max());
@@ -539,12 +540,14 @@ auto main(int argc, char** argv) -> int {
 	// fmt::print("library_name := {}\n", library_name);
 	// fmt::print("library_author := {}\n", library_author);
 	// fmt::print("depends_on_cpp_version := {}\n", depends_on_cpp_version);
-	
+
 	const auto argv_parser = create_argv_parser();
 	const auto print_help = [&]() -> void {
 		std::cerr << argv_parser;
 	};
-	const auto options = parse_configuration(configuration_file_path);
+
+	const auto config = toml::parse_file(configuration_file_path.string());
+	const auto options = parse_configuration(config);
 	// const auto options = parse_args(argv_parser, argc, argv)
 	// 						 .map_error([&](const auto& err) {
 	// 							 spdlog::error("{}", err);
@@ -615,20 +618,9 @@ auto main(int argc, char** argv) -> int {
 		return 1;
 	}
 
-	// TODO: maybe creating the entire hashmap here is not the most efficient way
-	phmap::flat_hash_map<int, Car> cars;
+	// phmap::flat_hash_map<int, Car> cars;
+	phmap::parallel_flat_hash_map<int, Car> cars;
 
-	const auto vehicles = route_files_xml_doc.child("routes").children("vehicle");
-	for (const auto& vehicle : vehicles) {
-		// const std::string vehicle_id = vehicle.attribute("id").as_string();
-		const auto vehicle_id = vehicle.attribute("id").as_int();
-		cars[vehicle_id] = Car {};
-	}
-	spdlog::info("Found {} vehicles in {}", cars.size(), sumocfg.route_files.string());
-	spdlog::info("Created hashmap with {} vehicles", cars.size());
-
-	
-	
 	zmq::context_t	  zmq_ctx;
 	zmq::socket_t	  sock(zmq_ctx, zmq::socket_type::pub);
 	// FIXME: do not use tcp maybe ipc://
@@ -696,18 +688,27 @@ auto main(int argc, char** argv) -> int {
 
 	const auto streetlamp_distance_threshold_doubled = std::pow(options.streetlamp_distance_threshold, 2);
 	// TODO: detect signed overflow
+	// deallocate-inactive-cars-every
+	const auto do_deallocation_pass_every_n_steps = config["sumo"]["deallocate-inactive-cars-every"].value_or(1000);
+	if (do_deallocation_pass_every_n_steps <= 0) {
+		spdlog::error("sumo.deallocate-inactive-cars-every must be positive");
+		std::exit(1);
+	}
+	int do_deallocation_pass_at_step = do_deallocation_pass_every_n_steps;
+
+	const auto t_sim_start = std::chrono::high_resolution_clock::now();
 
 	for (int simulation_step = 0; simulation_step < options.simulation_steps; ++simulation_step) {
 		// TODO: keep track of the accumelated time of the simulation
 		const auto t_start = std::chrono::high_resolution_clock::now();
 		Simulation::step();
 
-		
 		{ // Get (x,y, theta) of all vehicles
 			const auto vehicles_ids = Vehicle::getIDList();
 
 			for (const auto& id : vehicles_ids) {
 				const int id_as_int = std::stoi(id);
+				cars.try_emplace(id_as_int, Car {});
 				auto& car = cars[id_as_int];
 
 				const auto	 position = Vehicle::getPosition(id);
@@ -718,7 +719,29 @@ auto main(int argc, char** argv) -> int {
 				car.alive = true;
 			}
 		}
-		
+
+		if (simulation_step == do_deallocation_pass_at_step) {
+			// Go through all cars and deallocate the memory of the ones that are not alive
+			if (options.verbose) {
+				// spdlog::info("Deallocating memory of dead cars");
+				fmt::print("Deallocating memory of dead cars\r");
+			}
+			const auto num_cars_before = cars.size();
+			for (auto it = cars.begin(); it != cars.end();) {
+				if (! it->second.alive) {
+					it = cars.erase(it);
+				} else {
+					++it;
+				}
+			}
+			const auto num_cars_after = cars.size();
+			if (options.verbose) {
+				// spdlog::info("Deallocated {} - {} = {} cars", num_cars_before, num_cars_after, num_cars_before - num_cars_after);
+				fmt::println("Deallocated {} - {} = {} cars", num_cars_before, num_cars_after, num_cars_before - num_cars_after);
+			}
+			do_deallocation_pass_at_step += do_deallocation_pass_every_n_steps;
+		}
+
 		std::atomic<int> num_streetlamps_with_vehicles_nearby = 0;
 		// Check if any cars are close to a street lamp
 		const auto look_for_cars_close_to_streetlamps = [&](const auto start, const auto end) {
@@ -729,11 +752,11 @@ auto main(int argc, char** argv) -> int {
 					// const int car_id = car.first;
 					// const auto& car_data = car.second;
 					// TODO PERF: use squared distance instead of distance to avoid the sqrt call
-					const double distance (car.x - lamp.lon) * (car.x - lamp.lon) + (car.y - lamp.lat) * (car.y - lamp.lat);
+					const double distance = (car.x - lamp.lon) * (car.x - lamp.lon) + (car.y - lamp.lat) * (car.y - lamp.lat);
 					// const double distance = std::hypot(car.x - lamp.lon, car.y - lamp.lat);
 
 					// streetlamp_distance_threshold_doubled
-					if (distance <= options.streetlamp_distance_threshold) {
+					if (distance <= streetlamp_distance_threshold_doubled) {
 						// The car is close to the street lamp
 						// Turn on the street lamp
 						// fmt::print("Car {} is close to street lamp {}\n", car_id, lamp.id);
@@ -772,7 +795,7 @@ auto main(int argc, char** argv) -> int {
 		}
 
 		// Wait for all threads in the thread pool to finish
-		// NOTE: We do this here after the code that generates the data of all alive cars, to have the 
+		// NOTE: We do this here after the code that generates the data of all alive cars, to have the
 		// main thread do something while we wait for the other threads to finish
 		// This is better than calling .wait() right after the call to pool.parallelize_loop()
 		multi_future.wait();
@@ -790,27 +813,34 @@ auto main(int argc, char** argv) -> int {
 		}
 
 		{ // Update the progress bar
-			const auto t_end = std::chrono::high_resolution_clock::now();
-			const auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t_end - t_start);
 
 			const double percent_done = static_cast<double>(simulation_step) / options.simulation_steps * 100.0;
 			bar.set_progress(percent_done);
-			// TODO: estimate the remaining time of the simulation
-			static long duration_avg = 0;
-			duration_avg = (duration_avg + duration.count()) / 2;
-			const auto remaining_time = std::chrono::microseconds(duration_avg * (options.simulation_steps - simulation_step));
-			std::string postfix;
 			if (options.verbose) {
+				const auto t_end = std::chrono::high_resolution_clock::now();
+				const auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t_end - t_start);
+				// Estimate the remaining time of the simulation
+				static long duration_avg = 0;
+				duration_avg = (duration_avg + duration.count()) / 2;
+				const auto remaining_time = std::chrono::microseconds(duration_avg * (options.simulation_steps - simulation_step));
+				std::string postfix;
 				postfix = fmt::format("simulation-step: {}/{} (in percent: {:.2f}%) took: {} μs, estimated time to completion: {}", simulation_step, options.simulation_steps, percent_done, duration.count(), humantime(remaining_time.count()));
-
+				bar.set_option(indicators::option::PostfixText(postfix));
 			}
-			bar.set_option(indicators::option::PostfixText(postfix));
 		}
 	}
+
+	const auto t_sim_end = std::chrono::high_resolution_clock::now();
+
+	bar.set_progress(100.0);
+	bar.mark_as_completed();
 
 	indicators::show_console_cursor(true);
 
 	Simulation::close();
+
+	const auto t_sim_duration = std::chrono::duration_cast<std::chrono::microseconds>(t_sim_end - t_sim_start);
+	spdlog::info("Simulation took: {}", humantime(t_sim_duration.count()));
 
 	return 0;
 }
