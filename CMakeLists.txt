@@ -23,6 +23,12 @@ if(NOT EXISTS $ENV{SUMO_HOME})
     message(FATAL_ERROR "Environment variable SUMO_HOME does not point to a valid directory")
 endif()
 
+# If compiler is clang or gcc
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    # Enable compiler warnings
+    add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
+
 message(STATUS "$SUMO_HOME: $ENV{SUMO_HOME}")
 
 # Force compiler to output in color when you use ninja as generator
@@ -70,24 +76,26 @@ target_link_libraries(${PROJECT_NAME} PRIVATE ${external_library_targets})
 # Link with SUMO's libtraci
 # g++ -o test -std=c++11 -I$SUMO_HOME/src test.cpp -L$SUMO_HOME/bin -ltracicpp
 target_include_directories(${PROJECT_NAME} PRIVATE $ENV{SUMO_HOME}/src) # Equivalent to -I$SUMO_HOME/src
+if (WIN32)
+    target_include_directories(${PROJECT_NAME} PRIVATE $ENV{SUMO_HOME}/tools/include)
+endif()
+
 # target_include_directories(${PROJECT_NAME} PRIVATE )
 # target_link_libraries(${PROJECT_NAME} PRIVATE $ENV{SUMO_HOME}/tools/libtraci/_libtraci.so) # Equivalent to -ltracicpp
-target_link_libraries(${PROJECT_NAME} PRIVATE tracicpp)
+if (WIN32)
+else()
+    target_link_libraries(${PROJECT_NAME} PRIVATE tracicpp)
+endif()
+
 target_link_directories(${PROJECT_NAME} PRIVATE $ENV{SUMO_HOME}/bin) # Equivalent to -L$SUMO_HOME/bin
-target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wpedantic)
 
 add_executable(zmq-client-demo src/zmq-client-demo.cpp)
 target_link_libraries(zmq-client-demo PRIVATE ${external_library_targets})
-target_compile_options(zmq-client-demo PRIVATE -Wall -Wextra -Wpedantic)
-
 
 add_executable(parse-streetlamps-from-osm src/parse-streetlamps-from-osm.cpp)
 target_link_libraries(parse-streetlamps-from-osm PRIVATE ${external_library_targets})
-target_compile_options(parse-streetlamps-from-osm PRIVATE -Wall -Wextra -Wpedantic)
-
 
 find_package(Catch2 REQUIRED)
 add_executable(test-ringbuf tests/ringbuf.cpp)
 target_include_directories(test-ringbuf PRIVATE src)
 target_link_libraries(test-ringbuf PRIVATE Catch2::Catch2WithMain)
-
