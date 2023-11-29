@@ -45,7 +45,7 @@ def main(argc: int, argv: list[str]) -> int:
         print(f"Cannot find `{sumo_cmd}` in PATH!", file=sys.stderr)
         return 1
 
-    configuration_path = Path("configuration.toml")
+    configuration_path = Path("config.toml")
     if not configuration_path.exists():
         print(f"Cannot find `{configuration_path}`!")
         return 1

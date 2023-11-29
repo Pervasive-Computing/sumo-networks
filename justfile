@@ -1,9 +1,11 @@
 builddir := "build"
 buildmode := "Release"
 generator := "Ninja"
+cxx := "/usr/bin/g++"
 
 default:
-    @just --list
+    just --list
+    just --variables
 
 alias i := install-dependencies
 install-dependencies:
@@ -11,11 +13,11 @@ install-dependencies:
 
 alias c := configure
 configure:
-    cmake -S . -B {{builddir}} -DCMAKE_TOOLCHAIN_FILE=conan_toolchain.cmake -DCMAKE_BUILD_TYPE={{buildmode}} -G {{generator}}
+    cmake -S . -B {{builddir}} -DCMAKE_TOOLCHAIN_FILE=conan_toolchain.cmake -DCMAKE_BUILD_TYPE={{buildmode}} -DCMAKE_CXX_COMPILER={{cxx}} -G {{generator}}
 
 alias b := build
 build:
-    cmake --build {{builddir}}
+    cmake --build {{builddir}} --config {{buildmode}}
 
 [unix]
 doit: install-dependencies configure build

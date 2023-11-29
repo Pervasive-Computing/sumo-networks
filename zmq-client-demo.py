@@ -7,6 +7,7 @@ import argparse
 
 import zmq
 import cbor2
+from loguru import logger
 try:
     from rich import print, pretty
     pretty.install()
@@ -26,13 +27,13 @@ def main(argc: int, argv: list[str]) -> int:
 
     context = zmq.Context()
 
-    print(f"Connecting to server on port {args.port}...")
+    logger.info(f"Connecting to server on port {args.port}...")
     subscriber = context.socket(zmq.SUB)
     subscriber.connect(f"tcp://localhost:{args.port}")
-    # topic: bytes = b"cars"
-    topic: bytes = b"streetlamps"
+    topic: bytes = b"cars"
+    # topic: bytes = b"streetlamps"
     subscriber.setsockopt(zmq.SUBSCRIBE, topic)
-    print("Connected!")
+    logger.info("Connected!")
 
     n_messages_received: int = 0
     try:
@@ -43,9 +44,9 @@ def main(argc: int, argv: list[str]) -> int:
             data = cbor2.loads(message[len(topic):]) # skip the first 4 bytes as they are the topic "cars"
             # clear_screen()
             print(f"Received message #{n_messages_received}: {data}")
-            # time.sleep(0.1)
+            time.sleep(0.1)
     except KeyboardInterrupt:
-        print("Interrupted!")
+        logger.warning("Interrupted!")
     finally:
         subscriber.close()
         context.term()

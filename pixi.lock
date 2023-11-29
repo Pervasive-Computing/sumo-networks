@@ -321,6 +321,26 @@ package:
   size: 61588
   timestamp: 1686575217516
 - platform: linux-64
+  name: loguru
+  version: 0.7.2
+  category: main
+  manager: conda
+  dependencies:
+  - python >=3.12.0rc3,<3.13.0a0
+  - python_abi 3.12.* *_cp312
+  url: https://conda.anaconda.org/conda-forge/linux-64/loguru-0.7.2-py312h7900ff3_1.conda
+  hash:
+    md5: 507696b7c888a8b872b50f24ac860089
+    sha256: 9e9a485360cfa551e63b2d0d0d6ea16142c68a68925616baf421e99c97ebdc2b
+  build: py312h7900ff3_1
+  arch: x86_64
+  subdir: linux-64
+  build_number: 1
+  license: MIT
+  license_family: MIT
+  size: 123004
+  timestamp: 1695547510797
+- platform: linux-64
   name: markdown-it-py
   version: 3.0.0
   category: main

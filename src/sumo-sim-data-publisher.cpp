@@ -1,18 +1,18 @@
-#include <algorithm>
+// #include <algorithm>
 #include <cmath>
 #include <chrono>
 using namespace std::chrono_literals;
 #include <cmath>
 #include <filesystem>
-#include <queue>
-#include <functional>
+// #include <queue>
+// #include <functional>
 #include <iostream>
-#include <mutex>
-#include <numeric>
-#include <optional>
+// #include <mutex>
+// #include <numeric>
+// #include <optional>
 #include <string>
 #include <string_view>
-#include <execution>
+// #include <execution>
 using namespace std::string_view_literals;
 #include <thread>
 #include <vector>
@@ -42,7 +42,7 @@ using namespace nlohmann::literals; // for ""_json
 #include <libsumo/libtraci.h>
 
 #include "ansi-escape-codes.hpp"
-#include "debug-macro.hpp"
+// #include "debug-macro.hpp"
 #include "pretty-printers.hpp"
 #include "streetlamp.hpp"
 #include "humantime.hpp"
@@ -526,7 +526,7 @@ namespace topics {
 };
 
 auto main(int argc, char** argv) -> int {
-	const auto configuration_file_path = std::filesystem::path("configuration.toml");
+	const auto configuration_file_path = std::filesystem::path("config.toml");
 	if (! std::filesystem::exists(configuration_file_path)) {
 		spdlog::error("Configuration file not found: {}", configuration_file_path.string());
 		std::exit(1);
@@ -694,12 +694,13 @@ auto main(int argc, char** argv) -> int {
 		spdlog::error("sumo.deallocate-inactive-cars-every must be positive");
 		std::exit(1);
 	}
+
 	int do_deallocation_pass_at_step = do_deallocation_pass_every_n_steps;
 
 	const auto t_sim_start = std::chrono::high_resolution_clock::now();
 
 	for (int simulation_step = 0; simulation_step < options.simulation_steps; ++simulation_step) {
-		// TODO: keep track of the accumelated time of the simulation
+		// Keep track of the accumelated time of the simulation
 		const auto t_start = std::chrono::high_resolution_clock::now();
 		Simulation::step();
 
@@ -747,10 +748,7 @@ auto main(int argc, char** argv) -> int {
 		const auto look_for_cars_close_to_streetlamps = [&](const auto start, const auto end) {
 			for (auto idx = start; idx < end; ++idx) {
 				const auto lamp = streetlamps[idx];
-				// for (auto& car : cars) {
 				for (const auto& [_,car] : cars) {
-					// const int car_id = car.first;
-					// const auto& car_data = car.second;
 					// TODO PERF: use squared distance instead of distance to avoid the sqrt call
 					const double distance = (car.x - lamp.lon) * (car.x - lamp.lon) + (car.y - lamp.lat) * (car.y - lamp.lat);
 					// const double distance = std::hypot(car.x - lamp.lon, car.y - lamp.lat);
@@ -776,14 +774,15 @@ auto main(int argc, char** argv) -> int {
 			json j; // { "1": { "x": 1, "y": 2, "heading": 3 }, "2": { "x": 1, "y": 2, "heading": 3 } }
 			// Find all cars that are alive and put them into a json object
 			// TODO: use designated initializers
-			for (auto& item : cars) {
-				Car& car = item.second;
+			// for (auto& item : cars) {
+			for (auto& [vehicle_id, car] : cars) {
+				// Car& car = item.second;
 				if (! car.alive) {
 					continue;
 				}
 				car.alive = false; // Reset the alive flag
 				// const std::string& vehicle_id = item.first;
-				const int vehicle_id = item.first;
+				// const int vehicle_id = item.first;
 				j[std::to_string(vehicle_id)] = car.to_json();
 			}
 
@@ -791,7 +790,12 @@ auto main(int argc, char** argv) -> int {
 			const std::vector<u8> v = json::to_cbor(j);
 			const std::string payload(v.begin(), v.end());
 			// Send the data to all clients
-			sock.send(zmq::buffer(topics::cars + payload), zmq::send_flags::dontwait);
+			// TODO: rate limit the publish rate
+			const auto flags = zmq::send_flags::none;
+			const auto send_result = sock.send(zmq::buffer(topics::cars + payload), flags);
+			if (! send_result.has_value()) {
+				spdlog::error("{}:{} Failed to publish data on topic {}", __FILE__, __LINE__, topics::cars);
+			}
 		}
 
 		// Wait for all threads in the thread pool to finish
@@ -809,7 +813,11 @@ auto main(int argc, char** argv) -> int {
 			const std::vector<u8> v = json::to_cbor(array);
 			const std::string payload(v.begin(), v.end());
 			// Send the data to all clients
-			sock.send(zmq::buffer(topics::streetlamps + payload), zmq::send_flags::dontwait);
+			const auto flags = zmq::send_flags::none;
+			const auto send_result = sock.send(zmq::buffer(topics::streetlamps + payload), flags);
+			if (! send_result.has_value()) {
+				spdlog::error("{}:{} Failed to publish data on topic {}", __FILE__, __LINE__, topics::streetlamps);
+			}
 		}
 
 		{ // Update the progress bar
@@ -822,9 +830,8 @@ auto main(int argc, char** argv) -> int {
 				// Estimate the remaining time of the simulation
 				static long duration_avg = 0;
 				duration_avg = (duration_avg + duration.count()) / 2;
-				const auto remaining_time = std::chrono::microseconds(duration_avg * (options.simulation_steps - simulation_step));
-				std::string postfix;
-				postfix = fmt::format("simulation-step: {}/{} (in percent: {:.2f}%) took: {} μs, estimated time to completion: {}", simulation_step, options.simulation_steps, percent_done, duration.count(), humantime(remaining_time.count()));
+				const auto remaining_time_estimate = std::chrono::microseconds(duration_avg * (options.simulation_steps - simulation_step));
+				const auto postfix = fmt::format("simulation-step: {}/{} (in percent: {:.2f}%) took: {} μs, estimated time to completion: {}", simulation_step, options.simulation_steps, percent_done, duration.count(), humantime(remaining_time_estimate.count()));
 				bar.set_option(indicators::option::PostfixText(postfix));
 			}
 		}
