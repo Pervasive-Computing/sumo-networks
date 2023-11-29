@@ -89,6 +89,42 @@ using f64 = double;
 //   std::fputs("\r\033[K", stdout);
 // }
 
+class Timer {
+	public:
+	Timer() : t_start(std::chrono::high_resolution_clock::now()) {}
+
+	auto elapsed_ns() const -> std::uint64_t {
+		const auto t_now = std::chrono::high_resolution_clock::now();
+		const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(t_now - t_start);
+		return elapsed.count();
+	}
+
+	auto elapsed_us() const -> std::uint64_t {
+		const auto t_now = std::chrono::high_resolution_clock::now();
+		const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(t_now - t_start);
+		return elapsed.count();
+	}
+
+	auto elapsed_ms() const -> std::uint64_t {
+		const auto t_now = std::chrono::high_resolution_clock::now();
+		const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(t_now - t_start);
+		return elapsed.count();
+	}
+
+	auto elapsed_s() const -> std::uint64_t {
+		const auto t_now = std::chrono::high_resolution_clock::now();
+		const auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(t_now - t_start);
+		return elapsed.count();
+	}
+
+	auto reset() -> void {
+		t_start = std::chrono::high_resolution_clock::now();
+	}
+
+	private:
+	std::chrono::high_resolution_clock::time_point t_start;
+};
+
 struct SumoConfiguration {
 	std::filesystem::path net_file;
 	std::filesystem::path route_files;
@@ -525,6 +561,20 @@ namespace topics {
 	static const auto streetlamps = std::string("streetlamps");
 };
 
+struct Topic {
+	std::string name;
+	int publish_rate = 0;
+	bool enabled = false;
+};
+
+auto pformat(const Topic& topic) -> std::string {
+	return fmt::format("Topic {{ name: {}, publish_rate: {}, enabled: {} }}", topic.name, topic.publish_rate, topic.enabled);
+}
+
+auto pprint(const Topic& topic) -> void {
+	fmt::println("{}", pformat(topic));
+}
+
 auto main(int argc, char** argv) -> int {
 	const auto configuration_file_path = std::filesystem::path("config.toml");
 	if (! std::filesystem::exists(configuration_file_path)) {
@@ -558,7 +608,31 @@ auto main(int argc, char** argv) -> int {
 
 	pprint(options);
 
-	// ProgramOptions::print_toml_schema();
+	const auto topic_cars = Topic {
+		.name = config["topics"]["cars"].value_or("cars"),
+		.publish_rate = config["topics"]["cars"]["publish-rate"].value_or(0),
+		.enabled = config["topics"]["cars"]["enabled"].value_or(false),
+	};
+
+	if (topic_cars.publish_rate <= 0) {
+		spdlog::error("topics.cars.publish-rate must be positive");
+		std::exit(1);
+	}
+
+	pprint(topic_cars);
+
+	const auto topic_streetlamps = Topic {
+		.name = config["topics"]["streetlamps"].value_or("streetlamps"),
+		.publish_rate = config["topics"]["streetlamps"]["publish-rate"].value_or(0),
+		.enabled = config["topics"]["streetlamps"]["enabled"].value_or(false),
+	};
+
+	if (topic_streetlamps.publish_rate <= 0) {
+		spdlog::error("topics.streetlamps.publish-rate must be positive");
+		std::exit(1);
+	}
+
+	pprint(topic_streetlamps);
 
 	const auto sumo_home_path = [&]() {
 		auto result = get_sumo_home_directory_path();
@@ -653,6 +727,7 @@ auto main(int argc, char** argv) -> int {
 		const auto geo = Simulation::convertGeo(lamp.lon, lamp.lat, true);
 		lamp.lon = geo.x;
 		lamp.lat = geo.y;
+		// pprint(lamp);
 	}
 
 	spdlog::info("streetlamps.size(): {}", streetlamps.size());
@@ -663,11 +738,11 @@ auto main(int argc, char** argv) -> int {
 
 	auto bar = indicators::BlockProgressBar {
 		indicators::option::BarWidth {80},
-		indicators::option::Start {"["},
+		indicators::option::Start {"|"},
+		indicators::option::End {"|"},
 		// indicators::option::Fill{"■"},
 		// indicators::option::Lead{"■"},
 		// indicators::option::Remainder{"-"},
-		indicators::option::End {" ]"},
 		// indicators::option::PostfixText{""},
 		indicators::option::ShowElapsedTime {true},
 		indicators::option::ForegroundColor {indicators::Color::blue},
@@ -697,11 +772,13 @@ auto main(int argc, char** argv) -> int {
 
 	int do_deallocation_pass_at_step = do_deallocation_pass_every_n_steps;
 
-	const auto t_sim_start = std::chrono::high_resolution_clock::now();
+	// const auto t_sim_start = std::chrono::high_resolution_clock::now();
+	const auto sim_timer = Timer {};
 
 	for (int simulation_step = 0; simulation_step < options.simulation_steps; ++simulation_step) {
 		// Keep track of the accumelated time of the simulation
-		const auto t_start = std::chrono::high_resolution_clock::now();
+		// const auto t_start = std::chrono::high_resolution_clock::now();
+		const auto sim_step_timer = Timer {};
 		Simulation::step();
 
 		{ // Get (x,y, theta) of all vehicles
@@ -724,7 +801,6 @@ auto main(int argc, char** argv) -> int {
 		if (simulation_step == do_deallocation_pass_at_step) {
 			// Go through all cars and deallocate the memory of the ones that are not alive
 			if (options.verbose) {
-				// spdlog::info("Deallocating memory of dead cars");
 				fmt::print("Deallocating memory of dead cars\r");
 			}
 			const auto num_cars_before = cars.size();
@@ -737,7 +813,6 @@ auto main(int argc, char** argv) -> int {
 			}
 			const auto num_cars_after = cars.size();
 			if (options.verbose) {
-				// spdlog::info("Deallocated {} - {} = {} cars", num_cars_before, num_cars_after, num_cars_before - num_cars_after);
 				fmt::println("Deallocated {} - {} = {} cars", num_cars_before, num_cars_after, num_cars_before - num_cars_after);
 			}
 			do_deallocation_pass_at_step += do_deallocation_pass_every_n_steps;
@@ -749,17 +824,13 @@ auto main(int argc, char** argv) -> int {
 			for (auto idx = start; idx < end; ++idx) {
 				const auto lamp = streetlamps[idx];
 				for (const auto& [_,car] : cars) {
+					// TODO: maybe not as x and y are quite large numbers
 					// TODO PERF: use squared distance instead of distance to avoid the sqrt call
 					const double distance = (car.x - lamp.lon) * (car.x - lamp.lon) + (car.y - lamp.lat) * (car.y - lamp.lat);
 					// const double distance = std::hypot(car.x - lamp.lon, car.y - lamp.lat);
 
 					// streetlamp_distance_threshold_doubled
 					if (distance <= streetlamp_distance_threshold_doubled) {
-						// The car is close to the street lamp
-						// Turn on the street lamp
-						// fmt::print("Car {} is close to street lamp {}\n", car_id, lamp.id);
-						// lamp.on = true;
-						// break;
 						streetlamp_ids_with_vehicles_nearby[num_streetlamps_with_vehicles_nearby] = lamp.id;
 						num_streetlamps_with_vehicles_nearby++;
 					}
@@ -771,30 +842,52 @@ auto main(int argc, char** argv) -> int {
 
 		// TODO: preallocate some of the memory structures used in this block
 		{ // Publish information about the position and heading of all active cars
+		// TODO: rate limit the publish rate
+			static auto last_publish_time = std::chrono::high_resolution_clock::now();
+			const auto now = std::chrono::high_resolution_clock::now();
+			const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(now - last_publish_time);
+			const auto publish_freq = (1.0 / static_cast<double>(topic_cars.publish_rate)) * 1e6; // FIXME: calculated wrong
+			// spdlog::info("elapsed.count(): {}, publish_freq: {}", elapsed.count(), publish_freq);
+			if (elapsed.count() < publish_freq) {
+				const auto sleep_for = std::chrono::microseconds(static_cast<int>(publish_freq - elapsed.count()));
+				// spdlog::info("Sleeping for {} μs", sleep_for.count());
+				std::this_thread::sleep_for(sleep_for);
+				// std::this_thread::yield();
+				// spdlog::info("Sleeping for {} μs", static_cast<int>(publish_freq - elapsed.count()));
+			}
+
 			json j; // { "1": { "x": 1, "y": 2, "heading": 3 }, "2": { "x": 1, "y": 2, "heading": 3 } }
 			// Find all cars that are alive and put them into a json object
-			// TODO: use designated initializers
-			// for (auto& item : cars) {
 			for (auto& [vehicle_id, car] : cars) {
-				// Car& car = item.second;
 				if (! car.alive) {
 					continue;
 				}
 				car.alive = false; // Reset the alive flag
-				// const std::string& vehicle_id = item.first;
-				// const int vehicle_id = item.first;
 				j[std::to_string(vehicle_id)] = car.to_json();
 			}
 
 			// Serialize to CBOR encoding format
 			const std::vector<u8> v = json::to_cbor(j);
 			const std::string payload(v.begin(), v.end());
-			// Send the data to all clients
-			// TODO: rate limit the publish rate
+			// Publish the data to all clients
 			const auto flags = zmq::send_flags::none;
 			const auto send_result = sock.send(zmq::buffer(topics::cars + payload), flags);
 			if (! send_result.has_value()) {
 				spdlog::error("{}:{} Failed to publish data on topic {}", __FILE__, __LINE__, topics::cars);
+			}
+
+			last_publish_time = now;
+			{
+				static auto num_messages_published_last_second = 0;
+				num_messages_published_last_second++;
+				static auto last_report_publish_rate_time = std::chrono::high_resolution_clock::now();
+				const auto now = std::chrono::high_resolution_clock::now();
+				const auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - last_report_publish_rate_time);
+				if (elapsed.count() >= 1) {
+					spdlog::info("Published data {} times the last second on topic {} at a rate of {} Hz", num_messages_published_last_second, topics::cars, topic_cars.publish_rate);
+					last_report_publish_rate_time = now;
+					num_messages_published_last_second = 0;
+				}
 			}
 		}
 
@@ -825,29 +918,29 @@ auto main(int argc, char** argv) -> int {
 			const double percent_done = static_cast<double>(simulation_step) / options.simulation_steps * 100.0;
 			bar.set_progress(percent_done);
 			if (options.verbose) {
-				const auto t_end = std::chrono::high_resolution_clock::now();
-				const auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t_end - t_start);
+				// const auto t_end = std::chrono::high_resolution_clock::now();
+				// const auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t_end - t_start);
+				const auto duration = sim_step_timer.elapsed_us();
 				// Estimate the remaining time of the simulation
 				static long duration_avg = 0;
-				duration_avg = (duration_avg + duration.count()) / 2;
+				duration_avg = (duration_avg + duration) / 2;
 				const auto remaining_time_estimate = std::chrono::microseconds(duration_avg * (options.simulation_steps - simulation_step));
-				const auto postfix = fmt::format("simulation-step: {}/{} (in percent: {:.2f}%) took: {} μs, estimated time to completion: {}", simulation_step, options.simulation_steps, percent_done, duration.count(), humantime(remaining_time_estimate.count()));
+				const auto postfix = fmt::format("simulation-step: {}/{} (in percent: {:.2f}%) took: {} μs, estimated time to completion: {}", simulation_step, options.simulation_steps, percent_done, duration, humantime(remaining_time_estimate.count()));
 				bar.set_option(indicators::option::PostfixText(postfix));
 			}
 		}
 	}
 
-	const auto t_sim_end = std::chrono::high_resolution_clock::now();
+	// const auto t_sim_end = std::chrono::high_resolution_clock::now();
 
 	bar.set_progress(100.0);
 	bar.mark_as_completed();
-
 	indicators::show_console_cursor(true);
 
 	Simulation::close();
 
-	const auto t_sim_duration = std::chrono::duration_cast<std::chrono::microseconds>(t_sim_end - t_sim_start);
-	spdlog::info("Simulation took: {}", humantime(t_sim_duration.count()));
-
+	spdlog::info("Simulation took: {}", humantime(sim_timer.elapsed_us()));
+	// const auto t_sim_duration = std::chrono::duration_cast<std::chrono::microseconds>(t_sim_end - t_sim_start);
+	// spdlog::info("Simulation took: {}", humantime(t_sim_duration.count()));
 	return 0;
 }
