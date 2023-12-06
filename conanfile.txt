@@ -15,10 +15,11 @@ indicators/2.3
 cppzmq/4.10.0
 # protobuf/3.21.12
 # flann/1.9.2
-nanoflann/1.5.0
+# nanoflann/1.5.0
 tomlplusplus/3.4.0
 bshoshany-thread-pool/3.5.0
 catch2/3.4.0
+sqlite3/3.44.2
 
 [generators]
 CMakeToolchain
@@ -26,4 +27,3 @@ CMakeDeps
 
 # [layout]
 # cmake_layout
-

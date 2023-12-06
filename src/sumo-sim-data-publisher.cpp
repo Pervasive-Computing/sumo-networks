@@ -1,6 +1,6 @@
 // #include <algorithm>
-#include <cmath>
 #include <chrono>
+#include <cmath>
 using namespace std::chrono_literals;
 #include <cmath>
 #include <filesystem>
@@ -34,18 +34,18 @@ using namespace nlohmann::literals; // for ""_json
 // #include <indicators/progress_bar.hpp>
 #include <indicators/block_progress_bar.hpp>
 
-#include <zmq.hpp>
-#include <toml.hpp>
 #include <BS_thread_pool.hpp>
+#include <toml.hpp>
+#include <zmq.hpp>
 
 
 #include <libsumo/libtraci.h>
 
 #include "ansi-escape-codes.hpp"
 // #include "debug-macro.hpp"
+#include "humantime.hpp"
 #include "pretty-printers.hpp"
 #include "streetlamp.hpp"
-#include "humantime.hpp"
 
 using namespace libtraci;
 
@@ -90,13 +90,12 @@ using f64 = double;
 // }
 
 class Timer {
-	public:
-	Timer() : t_start(std::chrono::high_resolution_clock::now()) {}
+  public:
+	Timer() : t_start(std::chrono::high_resolution_clock::now()) { }
 
-	auto elapsed_ns() const -> std::uint64_t {
-		const auto t_now = std::chrono::high_resolution_clock::now();
-		const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(t_now - t_start);
-		return elapsed.count();
+	auto elapsed_ns() const {
+		return std::chrono::duration_cast<std::chrono::nanoseconds>(
+			std::chrono::high_resolution_clock::now() - t_start);
 	}
 
 	auto elapsed_us() const -> std::uint64_t {
@@ -117,11 +116,9 @@ class Timer {
 		return elapsed.count();
 	}
 
-	auto reset() -> void {
-		t_start = std::chrono::high_resolution_clock::now();
-	}
+	auto reset() -> void { t_start = std::chrono::high_resolution_clock::now(); }
 
-	private:
+  private:
 	std::chrono::high_resolution_clock::time_point t_start;
 };
 
@@ -131,9 +128,11 @@ struct SumoConfiguration {
 	std::filesystem::path additional_files;
 };
 
-auto parse_sumocfg(const std::filesystem::path& sumocfg_path) -> tl::expected<SumoConfiguration, std::string> {
+auto parse_sumocfg(const std::filesystem::path& sumocfg_path)
+	-> tl::expected<SumoConfiguration, std::string> {
 	pugi::xml_document sumocfg_xml_doc;
-	spdlog::info("sumocfg_path: {}, cwd: {}", sumocfg_path.string(), std::filesystem::current_path().string());
+	spdlog::info("sumocfg_path: {}, cwd: {}", sumocfg_path.string(),
+				 std::filesystem::current_path().string());
 	pugi::xml_parse_result result = sumocfg_xml_doc.load_file(sumocfg_path.string().c_str());
 	if (! result) {
 		return tl::unexpected(
@@ -179,13 +178,13 @@ struct Car {
 };
 
 
-
 enum class get_sumo_home_directory_path_error {
 	environment_variable_not_set,
 	environment_variable_not_a_directory,
 };
 
-auto get_sumo_home_directory_path() -> tl::expected<std::filesystem::path, get_sumo_home_directory_path_error> {
+auto get_sumo_home_directory_path()
+	-> tl::expected<std::filesystem::path, get_sumo_home_directory_path_error> {
 	// Check that $SUMO_HOME is set
 	if (const char* sumo_home = std::getenv("SUMO_HOME")) {
 		// $SUMO_HOME is set
@@ -203,16 +202,16 @@ auto get_sumo_home_directory_path() -> tl::expected<std::filesystem::path, get_s
 }
 
 struct ProgramOptions {
-	u16		 port;
-	bool verbose = false;
-	u16		 sumo_port;
-	i32		 simulation_steps;
+	u16					  port;
+	bool				  verbose = false;
+	u16					  sumo_port;
+	i32					  simulation_steps;
 	std::filesystem::path sumocfg_path;
 	std::filesystem::path osm_path;
 	// bool	 gui = true;
 	bool use_sumo_gui = false;
 	bool spawn_sumo = false;
-	i32 streetlamp_distance_threshold;
+	i32	 streetlamp_distance_threshold;
 
 	static auto print_toml_schema() -> void {
 		fmt::print(R"(
@@ -245,18 +244,19 @@ auto pprint(const ProgramOptions& options) -> void {
 				 pformat(options.simulation_steps));
 	fmt::println("{}{}.sumocfg_path{} = {},", indent, markup::bold, reset,
 				 pformat(options.sumocfg_path));
-	fmt::println("{}{}.osm_path{} = {},", indent, markup::bold, reset,
-				 pformat(options.osm_path));
+	fmt::println("{}{}.osm_path{} = {},", indent, markup::bold, reset, pformat(options.osm_path));
 	// fmt::println("{}{}.gui{} = {},", indent, markup::bold, reset, pformat(options.gui));
 	fmt::println("{}{}.verbose{} = {},", indent, markup::bold, reset, pformat(options.verbose));
-	fmt::println("{}{}.use_sumo_gui{} = {},", indent, markup::bold, reset, pformat(options.use_sumo_gui));
-	fmt::println("{}{}.spawn_sumo{} = {},", indent, markup::bold, reset, pformat(options.spawn_sumo));
-	fmt::println("{}{}.streetlamp_distance_threshold{} = {},", indent, markup::bold, reset, pformat(options.streetlamp_distance_threshold));
+	fmt::println("{}{}.use_sumo_gui{} = {},", indent, markup::bold, reset,
+				 pformat(options.use_sumo_gui));
+	fmt::println("{}{}.spawn_sumo{} = {},", indent, markup::bold, reset,
+				 pformat(options.spawn_sumo));
+	fmt::println("{}{}.streetlamp_distance_threshold{} = {},", indent, markup::bold, reset,
+				 pformat(options.streetlamp_distance_threshold));
 	fmt::println("}};");
 }
 
-[[nodiscard]]
-auto create_argv_parser() -> argparse::ArgumentParser {
+[[nodiscard]] auto create_argv_parser() -> argparse::ArgumentParser {
 	auto argv_parser = argparse::ArgumentParser(__FILE__, "0.1.0");
 
 	argv_parser
@@ -290,9 +290,7 @@ auto create_argv_parser() -> argparse::ArgumentParser {
 		.help("Number of update steps to perform in the simulation, constraints: 0 < "
 			  "simulation-steps");
 
-	argv_parser.add_argument("--osm")
-		.required()
-		.help("OpenStreetMap file of the area");
+	argv_parser.add_argument("--osm").required().help("OpenStreetMap file of the area");
 
 	argv_parser.add_argument("sumocfg").required().help("SUMO configuration file");
 	return argv_parser;
@@ -347,9 +345,8 @@ auto parse_args(argparse::ArgumentParser argv_parser, int argc, char** argv)
 	}
 
 	if (! (osm_path.has_extension()) || osm_path.extension().string() != ".osm") {
-		return tl::unexpected(
-			fmt::format("OSM configuration file must have extension .osm, not {}",
-						osm_path.extension().string()));
+		return tl::unexpected(fmt::format("OSM configuration file must have extension .osm, not {}",
+										  osm_path.extension().string()));
 	}
 
 	return ProgramOptions {
@@ -450,10 +447,8 @@ auto between(const int x, const int min, const int max) -> bool {
 // 			commandLine += arg;
 // 			commandLine += " ";
 // 		}
-// 		if (CreateProcess(nullptr, commandLine.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &si, &pi)) {
-// 			CloseHandle(pi.hThread);
-// 			CloseHandle(pi.hProcess);
-// 		} else {
+// 		if (CreateProcess(nullptr, commandLine.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr,
+// &si, &pi)) { 			CloseHandle(pi.hThread); 			CloseHandle(pi.hProcess); 		} else {
 // 			// Failed to start the sumo process
 // 			return false;
 // 		}
@@ -466,7 +461,8 @@ auto between(const int x, const int min, const int max) -> bool {
 // }
 
 
-// auto parse_configuration(const std::filesystem::path& configuration_file_path) -> ProgramOptions {
+// auto parse_configuration(const std::filesystem::path& configuration_file_path) -> ProgramOptions
+// {
 auto parse_configuration(const toml::parse_result& config) -> ProgramOptions {
 	// const auto config = [&]() {
 	// 	try {
@@ -483,13 +479,13 @@ auto parse_configuration(const toml::parse_result& config) -> ProgramOptions {
 
 	// const auto config = toml::parse_file(configuration_file_path.string());
 	const auto port = config["port"].value_or(10001);
-	if (!between(port, 0, std::numeric_limits<u16>::max())) {
+	if (! between(port, 0, std::numeric_limits<u16>::max())) {
 		spdlog::error("port must be between 0 and {}", std::numeric_limits<u16>::max());
 		std::exit(1);
 	}
 
 	const auto sumo_port = config["sumo"]["port"].value_or(10000);
-	if (!between(sumo_port, 0, std::numeric_limits<u16>::max())) {
+	if (! between(sumo_port, 0, std::numeric_limits<u16>::max())) {
 		spdlog::error("sumo.port must be between 0 and {}", std::numeric_limits<u16>::max());
 		std::exit(1);
 	}
@@ -526,12 +522,13 @@ auto parse_configuration(const toml::parse_result& config) -> ProgramOptions {
 
 	const bool use_sumo_gui = config["sumo"]["spawn"]["gui"].value_or(false);
 	const bool spawn_sumo = config["sumo"]["spawn"]["enabled"].value_or(false);
-	if (use_sumo_gui && !spawn_sumo) {
+	if (use_sumo_gui && ! spawn_sumo) {
 		spdlog::error("sumo.spawn.gui is true, but sumo.spawn.enabled is false");
 		std::exit(1);
 	}
 
-	const i32 streetlamp_distance_threshold = config["sumo"]["streetlamps"]["distance-threshold"].value_or(10);
+	const i32 streetlamp_distance_threshold =
+		config["sumo"]["streetlamps"]["distance-threshold"].value_or(10);
 
 	if (streetlamp_distance_threshold <= 0) {
 		spdlog::error("sumo.streetlamps.distance-threshold must be positive");
@@ -540,7 +537,7 @@ auto parse_configuration(const toml::parse_result& config) -> ProgramOptions {
 
 	const bool verbose = config["verbose"].value_or(false);
 	if (verbose) {
-		std::cout << toml::json_formatter{ config } << "\n";
+		std::cout << toml::json_formatter {config} << "\n";
 	}
 
 	return ProgramOptions {
@@ -559,16 +556,17 @@ auto parse_configuration(const toml::parse_result& config) -> ProgramOptions {
 namespace topics {
 	static const auto cars = std::string("cars");
 	static const auto streetlamps = std::string("streetlamps");
-};
+}; // namespace topics
 
 struct Topic {
 	std::string name;
-	int publish_rate = 0;
-	bool enabled = false;
+	int			publish_rate = 0;
+	bool		enabled = false;
 };
 
 auto pformat(const Topic& topic) -> std::string {
-	return fmt::format("Topic {{ name: {}, publish_rate: {}, enabled: {} }}", topic.name, topic.publish_rate, topic.enabled);
+	return fmt::format("Topic {{ name: {}, publish_rate: {}, enabled: {} }}", topic.name,
+					   topic.publish_rate, topic.enabled);
 }
 
 auto pprint(const Topic& topic) -> void {
@@ -583,7 +581,7 @@ auto main(int argc, char** argv) -> int {
 	}
 	// const auto config = toml::parse_file("configuration.toml");
 	// you can also iterate more 'traditionally' using a ranged-for
-		// get key-value pairs
+	// get key-value pairs
 	// std::string_view library_name = config["library"]["name"].value_or(""sv);
 	// std::string_view library_author = config["library"]["authors"][0].value_or(""sv);
 	// int64_t depends_on_cpp_version = config["dependencies"]["cpp"].value_or(0);
@@ -604,7 +602,7 @@ auto main(int argc, char** argv) -> int {
 	// 							 print_help();
 	// 							 std::exit(2);
 	// 						 })
-							//  .value();
+	//  .value();
 
 	pprint(options);
 
@@ -695,8 +693,8 @@ auto main(int argc, char** argv) -> int {
 	// phmap::flat_hash_map<int, Car> cars;
 	phmap::parallel_flat_hash_map<int, Car> cars;
 
-	zmq::context_t	  zmq_ctx;
-	zmq::socket_t	  sock(zmq_ctx, zmq::socket_type::pub);
+	zmq::context_t zmq_ctx;
+	zmq::socket_t  sock(zmq_ctx, zmq::socket_type::pub);
 	// FIXME: do not use tcp maybe ipc://
 	const std::string addr = fmt::format("tcp://*:{}", options.port);
 	sock.bind(addr);
@@ -706,23 +704,23 @@ auto main(int argc, char** argv) -> int {
 	Simulation::init(options.sumo_port, num_retries_sumo_sim_connect, "localhost");
 	const double dt = Simulation::getDeltaT();
 
-	auto streetlamps = extract_streetlamps_from_osm(options.osm_path)
-								 .map_error([](const auto& err) {
-									if (err == extract_streetlamps_from_osm_error::file_not_found) {
-										spdlog::error("{}:{} OSM file not found", __FILE__, __LINE__);
-									} else if (err == extract_streetlamps_from_osm_error::xml_parse_error) {
-										spdlog::error("Failed to parse OSM file");
-									}
-									std::exit(1);
-								 })
-								 .value();
+	auto streetlamps =
+		extract_streetlamps_from_osm(options.osm_path)
+			.map_error([](const auto& err) {
+				if (err == extract_streetlamps_from_osm_error::file_not_found) {
+					spdlog::error("{}:{} OSM file not found", __FILE__, __LINE__);
+				} else if (err == extract_streetlamps_from_osm_error::xml_parse_error) {
+					spdlog::error("Failed to parse OSM file");
+				}
+				std::exit(1);
+			})
+			.value();
 
 	// Change each street lamp's lon/lat into x/y
 	// We only need to do this once, as the street lamps are static
-	// We need to do this since the OpenStreetMap file contains lon/lat coordinates of the street lamps
-	// but the SUMO simulation uses x/y coordinates for the vehicles
-	// We do this here an not in the parsing step because we need to have the simulation running
-	// to convert lon/lat to x/y
+	// We need to do this since the OpenStreetMap file contains lon/lat coordinates of the street
+	// lamps but the SUMO simulation uses x/y coordinates for the vehicles We do this here an not in
+	// the parsing step because we need to have the simulation running to convert lon/lat to x/y
 	for (auto& lamp : streetlamps) {
 		const auto geo = Simulation::convertGeo(lamp.lon, lamp.lat, true);
 		lamp.lon = geo.x;
@@ -733,21 +731,16 @@ auto main(int argc, char** argv) -> int {
 	spdlog::info("streetlamps.size(): {}", streetlamps.size());
 	spdlog::info("dt: {}", dt);
 
-	// Hide cursor
-	indicators::show_console_cursor(false);
-
 	auto bar = indicators::BlockProgressBar {
 		indicators::option::BarWidth {80},
 		indicators::option::Start {"|"},
 		indicators::option::End {"|"},
-		// indicators::option::Fill{"■"},
-		// indicators::option::Lead{"■"},
-		// indicators::option::Remainder{"-"},
-		// indicators::option::PostfixText{""},
 		indicators::option::ShowElapsedTime {true},
 		indicators::option::ForegroundColor {indicators::Color::blue},
-		indicators::option::FontStyles {
-			std::vector<indicators::FontStyle> {indicators::FontStyle::bold}}};
+	};
+
+	// Hide cursor
+	indicators::show_console_cursor(false);
 
 
 	// Preallocate memory for the streetlamp_ids_with_vehicles_nearby vector
@@ -761,10 +754,12 @@ auto main(int argc, char** argv) -> int {
 	BS::thread_pool pool(n_threads_in_pool);
 	spdlog::info("Created thread pool with {} threads", pool.get_thread_count());
 
-	const auto streetlamp_distance_threshold_doubled = std::pow(options.streetlamp_distance_threshold, 2);
+	const auto streetlamp_distance_threshold_doubled =
+		std::pow(options.streetlamp_distance_threshold, 2);
 	// TODO: detect signed overflow
 	// deallocate-inactive-cars-every
-	const auto do_deallocation_pass_every_n_steps = config["sumo"]["deallocate-inactive-cars-every"].value_or(1000);
+	const auto do_deallocation_pass_every_n_steps =
+		config["sumo"]["deallocate-inactive-cars-every"].value_or(1000);
 	if (do_deallocation_pass_every_n_steps <= 0) {
 		spdlog::error("sumo.deallocate-inactive-cars-every must be positive");
 		std::exit(1);
@@ -789,7 +784,7 @@ auto main(int argc, char** argv) -> int {
 				cars.try_emplace(id_as_int, Car {});
 				auto& car = cars[id_as_int];
 
-				const auto	 position = Vehicle::getPosition(id);
+				const auto position = Vehicle::getPosition(id);
 
 				car.x = position.x;
 				car.y = position.y;
@@ -813,7 +808,8 @@ auto main(int argc, char** argv) -> int {
 			}
 			const auto num_cars_after = cars.size();
 			if (options.verbose) {
-				fmt::println("Deallocated {} - {} = {} cars", num_cars_before, num_cars_after, num_cars_before - num_cars_after);
+				fmt::println("Deallocated {} - {} = {} cars", num_cars_before, num_cars_after,
+							 num_cars_before - num_cars_after);
 			}
 			do_deallocation_pass_at_step += do_deallocation_pass_every_n_steps;
 		}
@@ -823,68 +819,80 @@ auto main(int argc, char** argv) -> int {
 		const auto look_for_cars_close_to_streetlamps = [&](const auto start, const auto end) {
 			for (auto idx = start; idx < end; ++idx) {
 				const auto lamp = streetlamps[idx];
-				for (const auto& [_,car] : cars) {
+				for (const auto& [_, car] : cars) {
 					// TODO: maybe not as x and y are quite large numbers
 					// TODO PERF: use squared distance instead of distance to avoid the sqrt call
-					const double distance = (car.x - lamp.lon) * (car.x - lamp.lon) + (car.y - lamp.lat) * (car.y - lamp.lat);
+					const double distance = (car.x - lamp.lon) * (car.x - lamp.lon) +
+											(car.y - lamp.lat) * (car.y - lamp.lat);
 					// const double distance = std::hypot(car.x - lamp.lon, car.y - lamp.lat);
 
 					// streetlamp_distance_threshold_doubled
 					if (distance <= streetlamp_distance_threshold_doubled) {
-						streetlamp_ids_with_vehicles_nearby[num_streetlamps_with_vehicles_nearby] = lamp.id;
+						streetlamp_ids_with_vehicles_nearby[num_streetlamps_with_vehicles_nearby] =
+							lamp.id;
 						num_streetlamps_with_vehicles_nearby++;
 					}
 				}
 			}
 		};
 
-		auto multi_future = pool.parallelize_loop(0, streetlamps.size(), look_for_cars_close_to_streetlamps);
+		auto multi_future =
+			pool.parallelize_loop(0, streetlamps.size(), look_for_cars_close_to_streetlamps);
 
-		// TODO: preallocate some of the memory structures used in this block
 		{ // Publish information about the position and heading of all active cars
-		// TODO: rate limit the publish rate
+			// TODO: preallocate some of the memory structures used in this block
+			// TODO: rate limit the publish rate
 			static auto last_publish_time = std::chrono::high_resolution_clock::now();
-			const auto now = std::chrono::high_resolution_clock::now();
-			const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(now - last_publish_time);
-			const auto publish_freq = (1.0 / static_cast<double>(topic_cars.publish_rate)) * 1e6; // FIXME: calculated wrong
-			// spdlog::info("elapsed.count(): {}, publish_freq: {}", elapsed.count(), publish_freq);
-			if (elapsed.count() < publish_freq) {
-				const auto sleep_for = std::chrono::microseconds(static_cast<int>(publish_freq - elapsed.count()));
+			const auto	now = std::chrono::high_resolution_clock::now();
+			const auto	elapsed =
+				std::chrono::duration_cast<std::chrono::microseconds>(now - last_publish_time)
+					.count();
+			const auto publish_freq = (1.0 / static_cast<double>(topic_cars.publish_rate)) *
+									  1e6; // FIXME: calculated wrong
+			if (elapsed < publish_freq) {
+				const auto sleep_for =
+					std::chrono::microseconds(static_cast<int>(publish_freq - elapsed));
 				// spdlog::info("Sleeping for {} μs", sleep_for.count());
 				std::this_thread::sleep_for(sleep_for);
 				// std::this_thread::yield();
-				// spdlog::info("Sleeping for {} μs", static_cast<int>(publish_freq - elapsed.count()));
+				// spdlog::info("Sleeping for {} μs", static_cast<int>(publish_freq -
+				// elapsed.count()));
 			}
 
-			json j; // { "1": { "x": 1, "y": 2, "heading": 3 }, "2": { "x": 1, "y": 2, "heading": 3 } }
+			json j; // { "1": { "x": 1, "y": 2, "heading": 3 }, "2": { "x": 1, "y": 2, "heading": 3
+					// } }
 			// Find all cars that are alive and put them into a json object
 			for (auto& [vehicle_id, car] : cars) {
-				if (! car.alive) {
-					continue;
+				if (car.alive) {
+					car.alive = false; // Reset the alive flag to prevent staying alive forever
+					j[std::to_string(vehicle_id)] = car.to_json();
 				}
-				car.alive = false; // Reset the alive flag
-				j[std::to_string(vehicle_id)] = car.to_json();
 			}
 
 			// Serialize to CBOR encoding format
 			const std::vector<u8> v = json::to_cbor(j);
-			const std::string payload(v.begin(), v.end());
+			const std::string	  payload(v.begin(), v.end());
 			// Publish the data to all clients
 			const auto flags = zmq::send_flags::none;
 			const auto send_result = sock.send(zmq::buffer(topics::cars + payload), flags);
 			if (! send_result.has_value()) {
-				spdlog::error("{}:{} Failed to publish data on topic {}", __FILE__, __LINE__, topics::cars);
+				spdlog::error("{}:{} Failed to publish data on topic {}", __FILE__, __LINE__,
+							  topics::cars);
 			}
 
 			last_publish_time = now;
 			{
 				static auto num_messages_published_last_second = 0;
 				num_messages_published_last_second++;
-				static auto last_report_publish_rate_time = std::chrono::high_resolution_clock::now();
+				static auto last_report_publish_rate_time =
+					std::chrono::high_resolution_clock::now();
 				const auto now = std::chrono::high_resolution_clock::now();
-				const auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - last_report_publish_rate_time);
+				const auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+					now - last_report_publish_rate_time);
 				if (elapsed.count() >= 1) {
-					spdlog::info("Published data {} times the last second on topic {} at a rate of {} Hz", num_messages_published_last_second, topics::cars, topic_cars.publish_rate);
+					spdlog::info(
+						"Published data {} times the last second on topic {} at a rate of {} Hz",
+						num_messages_published_last_second, topics::cars, topic_cars.publish_rate);
 					last_report_publish_rate_time = now;
 					num_messages_published_last_second = 0;
 				}
@@ -892,9 +900,9 @@ auto main(int argc, char** argv) -> int {
 		}
 
 		// Wait for all threads in the thread pool to finish
-		// NOTE: We do this here after the code that generates the data of all alive cars, to have the
-		// main thread do something while we wait for the other threads to finish
-		// This is better than calling .wait() right after the call to pool.parallelize_loop()
+		// NOTE: We do this here after the code that generates the data of all alive cars, to have
+		// the main thread do something while we wait for the other threads to finish This is better
+		// than calling .wait() right after the call to pool.parallelize_loop()
 		multi_future.wait();
 
 		{ // Publish information about which street lamps that have vehicles nearby
@@ -904,28 +912,36 @@ auto main(int argc, char** argv) -> int {
 			}
 			// Serialize to CBOR encoding format
 			const std::vector<u8> v = json::to_cbor(array);
-			const std::string payload(v.begin(), v.end());
+			const std::string	  payload(v.begin(), v.end());
 			// Send the data to all clients
 			const auto flags = zmq::send_flags::none;
 			const auto send_result = sock.send(zmq::buffer(topics::streetlamps + payload), flags);
 			if (! send_result.has_value()) {
-				spdlog::error("{}:{} Failed to publish data on topic {}", __FILE__, __LINE__, topics::streetlamps);
+				spdlog::error("{}:{} Failed to publish data on topic {}", __FILE__, __LINE__,
+							  topics::streetlamps);
 			}
 		}
 
 		{ // Update the progress bar
 
-			const double percent_done = static_cast<double>(simulation_step) / options.simulation_steps * 100.0;
+			const double percent_done =
+				static_cast<double>(simulation_step) / options.simulation_steps * 100.0;
 			bar.set_progress(percent_done);
 			if (options.verbose) {
 				// const auto t_end = std::chrono::high_resolution_clock::now();
-				// const auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t_end - t_start);
+				// const auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t_end
+				// - t_start);
 				const auto duration = sim_step_timer.elapsed_us();
 				// Estimate the remaining time of the simulation
 				static long duration_avg = 0;
 				duration_avg = (duration_avg + duration) / 2;
-				const auto remaining_time_estimate = std::chrono::microseconds(duration_avg * (options.simulation_steps - simulation_step));
-				const auto postfix = fmt::format("simulation-step: {}/{} (in percent: {:.2f}%) took: {} μs, estimated time to completion: {}", simulation_step, options.simulation_steps, percent_done, duration, humantime(remaining_time_estimate.count()));
+				const auto remaining_time_estimate = std::chrono::microseconds(
+					duration_avg * (options.simulation_steps - simulation_step));
+				const auto postfix =
+					fmt::format("simulation-step: {}/{} (in percent: {:.2f}%) took: {} μs, "
+								"estimated time to completion: {}",
+								simulation_step, options.simulation_steps, percent_done, duration,
+								humantime(remaining_time_estimate.count()));
 				bar.set_option(indicators::option::PostfixText(postfix));
 			}
 		}
@@ -940,7 +956,7 @@ auto main(int argc, char** argv) -> int {
 	Simulation::close();
 
 	spdlog::info("Simulation took: {}", humantime(sim_timer.elapsed_us()));
-	// const auto t_sim_duration = std::chrono::duration_cast<std::chrono::microseconds>(t_sim_end - t_sim_start);
-	// spdlog::info("Simulation took: {}", humantime(t_sim_duration.count()));
+	// const auto t_sim_duration = std::chrono::duration_cast<std::chrono::microseconds>(t_sim_end -
+	// t_sim_start); spdlog::info("Simulation took: {}", humantime(t_sim_duration.count()));
 	return 0;
 }

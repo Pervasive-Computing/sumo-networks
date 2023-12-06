@@ -3,10 +3,10 @@ port = 12000
 
 [sumo]
 port = 10000
-sumocfg-path = "katrinebjerg-lamp/katrinebjerg-lamp.sumocfg"
-osm-path = "katrinebjerg-lamp/katrinebjerg-lamp.osm"
+sumocfg-path = "horsens/horsens.sumocfg"
+osm-path = "horsens/horsens.osm"
 simulation-steps = 10000
-deallocate-inactive-cars-every = 1000 # in simulation steps
+deallocate-inactive-cars-every = 1000    # in simulation steps
 
 [sumo.spawn]
 enabled = true
@@ -18,9 +18,9 @@ distance-threshold = 50 # in meters
 [topics.cars]
 enabled = true
 name = "cars"
-publish-rate = 10 # in Hz
+publish-rate = 5 # in Hz
 
 [topics.streetlamps]
 enabled = true
 name = "streetlamps"
-publish-rate = 10 # in Hz
+publish-rate = 10    # in Hz
