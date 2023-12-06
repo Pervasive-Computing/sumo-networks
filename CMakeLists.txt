@@ -61,6 +61,8 @@ find_package(tomlplusplus REQUIRED)
 list(APPEND external_library_targets tomlplusplus::tomlplusplus)
 find_package(bshoshany-thread-pool REQUIRED)
 list(APPEND external_library_targets bshoshany-thread-pool::bshoshany-thread-pool)
+find_package(SQLite3 REQUIRED)
+list(APPEND external_library_targets SQLite::SQLite3)
 
 message(STATUS "external_library_targets:")
 foreach(external_library_target ${external_library_targets})
@@ -94,6 +96,11 @@ target_link_libraries(zmq-client-demo PRIVATE ${external_library_targets})
 
 add_executable(parse-streetlamps-from-osm src/parse-streetlamps-from-osm.cpp)
 target_link_libraries(parse-streetlamps-from-osm PRIVATE ${external_library_targets})
+
+
+add_executable(streetlamp-timeseries-server src/streetlamp-timeseries-server.cpp)
+target_link_libraries(streetlamp-timeseries-server PRIVATE streetlamp)
+target_link_libraries(streetlamp-timeseries-server PRIVATE ${external_library_targets})
 
 find_package(Catch2 REQUIRED)
 add_executable(test-ringbuf tests/ringbuf.cpp)
