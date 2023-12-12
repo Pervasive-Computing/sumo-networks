@@ -97,7 +97,7 @@ def main() -> int:
         # Choose a random streetlamp id
         streetlamp_id = random.choice(streetlamp_ids)
         cursor.execute(
-            "INSERT INTO measurements (streetlamp_id, timestamp, value) VALUES (?, ?, ?)",
+            "INSERT INTO measurements (streetlamp_id, timestamp, light_level) VALUES (?, ?, ?)",
             (streetlamp_id, timestamp, light_intensity),
         )
 

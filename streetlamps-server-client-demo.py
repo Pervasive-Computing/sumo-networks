@@ -63,18 +63,25 @@ def main() -> int:
         while True:
             id += 1
 
+            # Expect a json-rpc 2.0 request
             # {"jsonrpc": "2.0", "method": "lightlevel", "params": {"streetlamp": "123456", "reducer":
-		    # "mean|median", "per": "quarter|hour|day|week", "from": "2020-01-01T00:00:00Z", "to":
-		    # "2020-01-01T01:00:00Z"}, "id": 1}
+            # "mean|median", "per": "quarter|hour|day|week", "from": "1702396387", "to":
+            # "1701791732"}, "id": 1}
+            now = datetime.now()
+            to_unix_ts = int(now.timestamp())
+            from_unix_ts = int((now - timedelta(days=1)).timestamp())
+            # streetlamp_id = random.randint(0, 2**16)
+            streetlamp_id: int = -26043
+
             request= {
                 "jsonrpc": "2.0",
                 "method": "lightlevel",
                 "params": {
-                    "streetlamp": random.randint(0, 2**16),
+                    "streetlamp": streetlamp_id,
                     "reducer": "mean",
                     "per": "hour",
-                    "from": datetime.now().isoformat(),
-                    "to": (datetime.now() + timedelta(hours=1)).isoformat(),
+                    "from": from_unix_ts,
+                    "to": to_unix_ts,
                 },
                 "id": id,
             }

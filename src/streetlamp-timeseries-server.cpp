@@ -25,8 +25,8 @@ struct RequestParams {
     int streetlamp;
     std::string reducer;
     std::string per;
-    std::string from;
-    std::string to;
+    int from; // unix timestamp
+    int to; // unix timestamp
 };
 
 auto pformat(const RequestParams& params) -> std::string {
@@ -163,12 +163,25 @@ auto main(int argc, char** argv) -> int {
 
     Reply reply;
 
+    sqlite3_stmt *get_light_levels_between_stmt;
+    const auto sql_get_light_levels_between = R"(
+        SELECT light_level FROM measurements
+        WHERE streetlamp_id = ? AND timestamp BETWEEN ? AND ?
+    )";
+
+    if (sqlite3_prepare_v2(db, sql_get_light_levels_between, -1, &get_light_levels_between_stmt, nullptr) != SQLITE_OK) {
+        spdlog::error("Failed to prepare statement: {}", sqlite3_errmsg(db));
+        goto cleanup;
+    }
+
+
+
 	while (true) {
 		zmq::message_t request;
 		// Expect a json-rpc 2.0 request
 		// {"jsonrpc": "2.0", "method": "lightlevel", "params": {"streetlamp": "123456", "reducer":
-		// "mean|median", "per": "quarter|hour|day|week", "from": "2020-01-01T00:00:00Z", "to":
-		// "2020-01-01T01:00:00Z"}, "id": 1}
+		// "mean|median", "per": "quarter|hour|day|week", "from": "1702396387", "to":
+		// "1701791732"}, "id": 1}
 		if (const auto res = sock.recv(request, zmq::recv_flags::none); ! res) {
 			spdlog::error("{}:{} Error receiving message", __FILE__, __LINE__);
 			return 1;
@@ -186,11 +199,22 @@ auto main(int argc, char** argv) -> int {
 
 		spdlog::info("Received request: {}", pformat(*req));
 
+        // query database for light levels of the given streetlamp
+        sqlite3_bind_int(get_light_levels_between_stmt, 1, req->params.streetlamp);
+        sqlite3_bind_int(get_light_levels_between_stmt, 2, req->params.from);
+        sqlite3_bind_int(get_light_levels_between_stmt, 3, req->params.to);
+        std::vector<float> light_levels;
+        while (sqlite3_step(get_light_levels_between_stmt) == SQLITE_ROW) {
+            light_levels.push_back(sqlite3_column_double(get_light_levels_between_stmt, 0));
+        }
+        sqlite3_reset(get_light_levels_between_stmt);
 
+        spdlog::info("Found {} light levels for streetlamp {}", light_levels.size(), req->params.streetlamp);
 
         reply.jsonrpc = req->jsonrpc;
         reply.id = req->id;
         reply.result = {0.25, 0.56, 1.0, 0.0};
+
 		// Send reply back to client
 		// {"jsonrpc": "2.0", "result": [0.25, 0.56, 1.0, 0.0, ...], "id": 1}
         // Serialize reply to json
@@ -206,6 +230,7 @@ auto main(int argc, char** argv) -> int {
 	}
 
 	cleanup:
+    sqlite3_finalize(get_light_levels_between_stmt);
     sqlite3_close(db);
 
 	return 0;
