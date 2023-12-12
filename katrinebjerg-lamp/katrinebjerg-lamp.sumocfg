@@ -6,11 +6,11 @@
     </input>
     <time>
         <begin value="0"/>
-        <step-length value="0.01"/>
+        <step-length value="0.001"/>
         <end value="100000"/>
     </time>
     <gui_only>
-        <delay value="80"/>
+        <delay value="200"/>
         <start value="true"/>
     </gui_only>
 </configuration>

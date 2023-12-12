@@ -1,5 +1,6 @@
 // #include <algorithm>
 #include <chrono>
+#include <charconv>
 #include <cmath>
 using namespace std::chrono_literals;
 #include <cmath>
@@ -47,7 +48,7 @@ using namespace nlohmann::literals; // for ""_json
 #include "pretty-printers.hpp"
 #include "streetlamp.hpp"
 
-using namespace libtraci;
+using namespace libtraci; // TODO: remove
 
 using u8 = std::uint8_t;
 using u16 = std::uint16_t;
@@ -725,7 +726,6 @@ auto main(int argc, char** argv) -> int {
 		const auto geo = Simulation::convertGeo(lamp.lon, lamp.lat, true);
 		lamp.lon = geo.x;
 		lamp.lat = geo.y;
-		// pprint(lamp);
 	}
 
 	spdlog::info("streetlamps.size(): {}", streetlamps.size());
@@ -780,7 +780,9 @@ auto main(int argc, char** argv) -> int {
 			const auto vehicles_ids = Vehicle::getIDList();
 
 			for (const auto& id : vehicles_ids) {
+				// TODO: use std::from_chars instead of std::stoi
 				const int id_as_int = std::stoi(id);
+				// const
 				cars.try_emplace(id_as_int, Car {});
 				auto& car = cars[id_as_int];
 
@@ -849,35 +851,35 @@ auto main(int argc, char** argv) -> int {
 					.count();
 			const auto publish_freq = (1.0 / static_cast<double>(topic_cars.publish_rate)) *
 									  1e6; // FIXME: calculated wrong
-			if (elapsed < publish_freq) {
-				const auto sleep_for =
-					std::chrono::microseconds(static_cast<int>(publish_freq - elapsed));
-				// spdlog::info("Sleeping for {} μs", sleep_for.count());
-				std::this_thread::sleep_for(sleep_for);
+			if (elapsed >= publish_freq) {
+				// goto skip_publish;
+				// const auto sleep_for =
+				// 	std::chrono::microseconds(static_cast<int>(publish_freq - elapsed));
+				// // spdlog::info("Sleeping for {} μs", sleep_for.count());
+				// std::this_thread::sleep_for(sleep_for);
 				// std::this_thread::yield();
 				// spdlog::info("Sleeping for {} μs", static_cast<int>(publish_freq -
 				// elapsed.count()));
-			}
 
-			json j; // { "1": { "x": 1, "y": 2, "heading": 3 }, "2": { "x": 1, "y": 2, "heading": 3
-					// } }
-			// Find all cars that are alive and put them into a json object
-			for (auto& [vehicle_id, car] : cars) {
-				if (car.alive) {
-					car.alive = false; // Reset the alive flag to prevent staying alive forever
-					j[std::to_string(vehicle_id)] = car.to_json();
+				json j; // { "1": { "x": 1, "y": 2, "heading": 3 }, "2": { "x": 1, "y": 2, "heading": 3 } }
+				// Find all cars that are alive and put them into a json object
+				for (auto& [vehicle_id, car] : cars) {
+					if (car.alive) {
+						car.alive = false; // Reset the alive flag to prevent staying alive forever
+						j[std::to_string(vehicle_id)] = car.to_json();
+					}
 				}
-			}
 
-			// Serialize to CBOR encoding format
-			const std::vector<u8> v = json::to_cbor(j);
-			const std::string	  payload(v.begin(), v.end());
-			// Publish the data to all clients
-			const auto flags = zmq::send_flags::none;
-			const auto send_result = sock.send(zmq::buffer(topics::cars + payload), flags);
-			if (! send_result.has_value()) {
-				spdlog::error("{}:{} Failed to publish data on topic {}", __FILE__, __LINE__,
-							  topics::cars);
+				// Serialize to CBOR encoding format
+				const std::vector<u8> v = json::to_cbor(j);
+				const std::string	  payload(v.begin(), v.end());
+				// Publish the data to all clients
+				const auto flags = zmq::send_flags::none;
+				const auto send_result = sock.send(zmq::buffer(topics::cars + payload), flags);
+				if (! send_result.has_value()) {
+					spdlog::error("{}:{} Failed to publish data on topic {}", __FILE__, __LINE__,
+								topics::cars);
+				}
 			}
 
 			last_publish_time = now;
@@ -898,6 +900,7 @@ auto main(int argc, char** argv) -> int {
 				}
 			}
 		}
+		// :skip_publish
 
 		// Wait for all threads in the thread pool to finish
 		// NOTE: We do this here after the code that generates the data of all alive cars, to have
@@ -923,7 +926,6 @@ auto main(int argc, char** argv) -> int {
 		}
 
 		{ // Update the progress bar
-
 			const double percent_done =
 				static_cast<double>(simulation_step) / options.simulation_steps * 100.0;
 			bar.set_progress(percent_done);
@@ -947,8 +949,6 @@ auto main(int argc, char** argv) -> int {
 		}
 	}
 
-	// const auto t_sim_end = std::chrono::high_resolution_clock::now();
-
 	bar.set_progress(100.0);
 	bar.mark_as_completed();
 	indicators::show_console_cursor(true);
@@ -956,7 +956,6 @@ auto main(int argc, char** argv) -> int {
 	Simulation::close();
 
 	spdlog::info("Simulation took: {}", humantime(sim_timer.elapsed_us()));
-	// const auto t_sim_duration = std::chrono::duration_cast<std::chrono::microseconds>(t_sim_end -
-	// t_sim_start); spdlog::info("Simulation took: {}", humantime(t_sim_duration.count()));
+
 	return 0;
 }
