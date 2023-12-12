@@ -109,6 +109,28 @@ package:
   size: 92669
   timestamp: 1698964343178
 - platform: linux-64
+  name: faker
+  version: 20.1.0
+  category: main
+  manager: conda
+  dependencies:
+  - python >=3.7
+  - python-dateutil >=2.4
+  - typing-extensions >=3.10.0.1
+  url: https://conda.anaconda.org/conda-forge/noarch/faker-20.1.0-pyhd8ed1ab_0.conda
+  hash:
+    md5: 47db65f19f74a7d0aff9f8fefb7531e4
+    sha256: cd696ef1d9b39d1fe5ad7e994024974b335331f290627f14ce8877ad0377e780
+  build: pyhd8ed1ab_0
+  arch: x86_64
+  subdir: linux-64
+  build_number: 0
+  license: MIT
+  license_family: MIT
+  noarch: python
+  size: 1360976
+  timestamp: 1700579620390
+- platform: linux-64
   name: ld_impl_linux-64
   version: '2.40'
   category: main
@@ -476,6 +498,27 @@ package:
   size: 32123473
   timestamp: 1696324522323
 - platform: linux-64
+  name: python-dateutil
+  version: 2.8.2
+  category: main
+  manager: conda
+  dependencies:
+  - python >=3.6
+  - six >=1.5
+  url: https://conda.anaconda.org/conda-forge/noarch/python-dateutil-2.8.2-pyhd8ed1ab_0.tar.bz2
+  hash:
+    md5: dd999d1cc9f79e67dbb855c8924c7984
+    sha256: 54d7785c7678166aa45adeaccfc1d2b8c3c799ca2dc05d4a82bb39b1968bd7da
+  build: pyhd8ed1ab_0
+  arch: x86_64
+  subdir: linux-64
+  build_number: 0
+  license: Apache-2.0
+  license_family: APACHE
+  noarch: python
+  size: 245987
+  timestamp: 1626286448716
+- platform: linux-64
   name: python_abi
   version: '3.12'
   category: main
@@ -539,6 +582,26 @@ package:
   size: 281456
   timestamp: 1679532220005
 - platform: linux-64
+  name: result
+  version: 0.15.0
+  category: main
+  manager: conda
+  dependencies:
+  - python >=3.6
+  url: https://conda.anaconda.org/conda-forge/noarch/result-0.15.0-pyhd8ed1ab_0.conda
+  hash:
+    md5: 76dba91979c8a21f9131989f6eca7a4d
+    sha256: 362ceaa4f505d97c2f511befd5b4b375cb498e56bdc44ebae26483882ee54a2b
+  build: pyhd8ed1ab_0
+  arch: x86_64
+  subdir: linux-64
+  build_number: 0
+  license: MIT
+  license_family: MIT
+  noarch: python
+  size: 15248
+  timestamp: 1701764878206
+- platform: linux-64
   name: rich
   version: 13.6.0
   category: main
@@ -562,6 +625,26 @@ package:
   size: 183200
   timestamp: 1696096819794
 - platform: linux-64
+  name: six
+  version: 1.16.0
+  category: main
+  manager: conda
+  dependencies:
+  - python
+  url: https://conda.anaconda.org/conda-forge/noarch/six-1.16.0-pyh6c4a22f_0.tar.bz2
+  hash:
+    md5: e5f25f8dbc060e9a8d912e432202afc2
+    sha256: a85c38227b446f42c5b90d9b642f2c0567880c15d72492d8da074a59c8f91dd6
+  build: pyh6c4a22f_0
+  arch: x86_64
+  subdir: linux-64
+  build_number: 0
+  license: MIT
+  license_family: MIT
+  noarch: python
+  size: 14259
+  timestamp: 1620240338595
+- platform: linux-64
   name: tk
   version: 8.6.13
   category: main
@@ -581,6 +664,26 @@ package:
   license_family: BSD
   size: 3318875
   timestamp: 1699202167581
+- platform: linux-64
+  name: typing-extensions
+  version: 4.8.0
+  category: main
+  manager: conda
+  dependencies:
+  - typing_extensions 4.8.0 pyha770c72_0
+  url: https://conda.anaconda.org/conda-forge/noarch/typing-extensions-4.8.0-hd8ed1ab_0.conda
+  hash:
+    md5: 384462e63262a527bda564fa2d9126c0
+    sha256: d6e1dddd0c372218ef15912383d351ac8c73465cbf16238017f0269813cafe2d
+  build: hd8ed1ab_0
+  arch: x86_64
+  subdir: linux-64
+  build_number: 0
+  license: PSF-2.0
+  license_family: PSF
+  noarch: python
+  size: 10104
+  timestamp: 1695040958008
 - platform: linux-64
   name: typing_extensions
   version: 4.8.0
