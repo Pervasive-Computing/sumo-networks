@@ -702,8 +702,8 @@ auto main(int argc, char** argv) -> int {
 	spdlog::info("Bound zmq PUB socket to {}", addr);
 
 	const int num_retries_sumo_sim_connect = 100;
-	Simulation::init(options.sumo_port, num_retries_sumo_sim_connect, "localhost");
-	const double dt = Simulation::getDeltaT();
+	libtraci::Simulation::init(options.sumo_port, num_retries_sumo_sim_connect, "localhost");
+	const double dt = libtraci::Simulation::getDeltaT();
 
 	auto streetlamps =
 		extract_streetlamps_from_osm(options.osm_path)
@@ -723,7 +723,7 @@ auto main(int argc, char** argv) -> int {
 	// lamps but the SUMO simulation uses x/y coordinates for the vehicles We do this here an not in
 	// the parsing step because we need to have the simulation running to convert lon/lat to x/y
 	for (auto& lamp : streetlamps) {
-		const auto geo = Simulation::convertGeo(lamp.lon, lamp.lat, true);
+		const auto geo = libtraci::Simulation::convertGeo(lamp.lon, lamp.lat, true);
 		lamp.lon = geo.x;
 		lamp.lat = geo.y;
 	}
@@ -742,8 +742,6 @@ auto main(int argc, char** argv) -> int {
 	// Hide cursor
 	indicators::show_console_cursor(false);
 
-
-	// Preallocate memory for the streetlamp_ids_with_vehicles_nearby vector
 	auto streetlamp_ids_with_vehicles_nearby = std::vector<std::int64_t>(streetlamps.size(), 0);
 
 	const auto n_hardware_threads = std::thread::hardware_concurrency();
@@ -756,12 +754,11 @@ auto main(int argc, char** argv) -> int {
 
 	const auto streetlamp_distance_threshold_doubled =
 		std::pow(options.streetlamp_distance_threshold, 2);
-	// TODO: detect signed overflow
 	// deallocate-inactive-cars-every
 	const auto do_deallocation_pass_every_n_steps =
 		config["sumo"]["deallocate-inactive-cars-every"].value_or(1000);
 	if (do_deallocation_pass_every_n_steps <= 0) {
-		spdlog::error("sumo.deallocate-inactive-cars-every must be positive");
+		spdlog::error("field: sumo.deallocate-inactive-cars-every in {} must be positive", "config.toml");
 		std::exit(1);
 	}
 
@@ -772,25 +769,24 @@ auto main(int argc, char** argv) -> int {
 
 	for (int simulation_step = 0; simulation_step < options.simulation_steps; ++simulation_step) {
 		// Keep track of the accumelated time of the simulation
-		// const auto t_start = std::chrono::high_resolution_clock::now();
 		const auto sim_step_timer = Timer {};
-		Simulation::step();
+		libtraci::Simulation::step();
 
 		{ // Get (x,y, theta) of all vehicles
-			const auto vehicles_ids = Vehicle::getIDList();
+			const auto vehicles_ids = libtraci::Vehicle::getIDList();
 
 			for (const auto& id : vehicles_ids) {
-				// TODO: use std::from_chars instead of std::stoi
-				const int id_as_int = std::stoi(id);
-				// const
+				// const int id_as_int = std::stoi(id);
+				int id_as_int = 0;
+				std::from_chars(id.data(), id.data() + id.size(), id_as_int);
 				cars.try_emplace(id_as_int, Car {});
 				auto& car = cars[id_as_int];
 
-				const auto position = Vehicle::getPosition(id);
+				const auto position = libtraci::Vehicle::getPosition(id);
 
 				car.x = position.x;
 				car.y = position.y;
-				car.heading = Vehicle::getAngle(id);
+				car.heading = libtraci::Vehicle::getAngle(id);
 				car.alive = true;
 			}
 		}
@@ -842,25 +838,17 @@ auto main(int argc, char** argv) -> int {
 			pool.parallelize_loop(0, streetlamps.size(), look_for_cars_close_to_streetlamps);
 
 		{ // Publish information about the position and heading of all active cars
-			// TODO: preallocate some of the memory structures used in this block
 			// TODO: rate limit the publish rate
 			static auto last_publish_time = std::chrono::high_resolution_clock::now();
-			const auto	now = std::chrono::high_resolution_clock::now();
-			const auto	elapsed =
-				std::chrono::duration_cast<std::chrono::microseconds>(now - last_publish_time)
-					.count();
-			const auto publish_freq = (1.0 / static_cast<double>(topic_cars.publish_rate)) *
-									  1e6; // FIXME: calculated wrong
-			if (elapsed >= publish_freq) {
-				// goto skip_publish;
-				// const auto sleep_for =
-				// 	std::chrono::microseconds(static_cast<int>(publish_freq - elapsed));
-				// // spdlog::info("Sleeping for {} μs", sleep_for.count());
-				// std::this_thread::sleep_for(sleep_for);
-				// std::this_thread::yield();
-				// spdlog::info("Sleeping for {} μs", static_cast<int>(publish_freq -
-				// elapsed.count()));
+			const auto now = std::chrono::high_resolution_clock::now();
+			const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now -
+																						 last_publish_time);
+			// Convert HZ to milliseconds
 
+			// e.g. publish_rate = 10 Hz
+
+			const auto configured_publish_freq = 1000 / topic_cars.publish_rate;
+			if (elapsed.count() >= configured_publish_freq) {
 				json j; // { "1": { "x": 1, "y": 2, "heading": 3 }, "2": { "x": 1, "y": 2, "heading": 3 } }
 				// Find all cars that are alive and put them into a json object
 				for (auto& [vehicle_id, car] : cars) {
@@ -881,26 +869,7 @@ auto main(int argc, char** argv) -> int {
 								topics::cars);
 				}
 			}
-
-			last_publish_time = now;
-			{
-				static auto num_messages_published_last_second = 0;
-				num_messages_published_last_second++;
-				static auto last_report_publish_rate_time =
-					std::chrono::high_resolution_clock::now();
-				const auto now = std::chrono::high_resolution_clock::now();
-				const auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
-					now - last_report_publish_rate_time);
-				if (elapsed.count() >= 1) {
-					spdlog::info(
-						"Published data {} times the last second on topic {} at a rate of {} Hz",
-						num_messages_published_last_second, topics::cars, topic_cars.publish_rate);
-					last_report_publish_rate_time = now;
-					num_messages_published_last_second = 0;
-				}
-			}
 		}
-		// :skip_publish
 
 		// Wait for all threads in the thread pool to finish
 		// NOTE: We do this here after the code that generates the data of all alive cars, to have
