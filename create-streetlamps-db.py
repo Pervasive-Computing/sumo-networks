@@ -4,12 +4,10 @@ import argparse
 import os
 import sqlite3
 import sys
-import time
 import xml.etree.ElementTree as ET
-from dataclasses import asdict, astuple, dataclass
+from dataclasses import astuple, dataclass
 from pathlib import Path
 
-from faker import Faker
 from loguru import logger
 from result import Err, Ok, Result, is_err, is_ok
 
@@ -101,6 +99,7 @@ def main() -> int:
     db.commit()
 
     db.close()
+    logger.info(f"Inserted {len(streetlamps) = } streetlamps into {args.db_file_path = }")
     return 0
 
 

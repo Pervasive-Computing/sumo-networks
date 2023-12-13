@@ -5,15 +5,10 @@ import os
 import random
 import sqlite3
 import sys
-import time
-import xml.etree.ElementTree as ET
-from dataclasses import asdict, astuple, dataclass
+from dataclasses import dataclass
 from datetime import datetime, timedelta
-from pathlib import Path
 
-from faker import Faker
 from loguru import logger
-from result import Err, Ok, Result, is_err, is_ok
 
 # Check if rich is installed, and only import it if it is.
 try:
@@ -79,15 +74,13 @@ def main() -> int:
         cursor.execute("SELECT id FROM streetlamps")
         streetlamp_ids = [id for (id,) in cursor.fetchall()]
 
-    # end_datetime = datetime(2023, 12, 12)
     end_datetime = datetime.now()
     end_unix_timestamp = int(end_datetime.timestamp())
-    # Generate random unix timestamps from `end_datetime` to `end_datetime - 1 week`
-    start_datetime = end_datetime - timedelta(weeks=1)
+    start_datetime = end_datetime - timedelta(days=1)
     start_unix_timestamp = int(start_datetime.timestamp())
 
     logger.info(
-        f"Generating {args.n = } measurements with timestamps between {start_datetime} and {end_datetime}..."
+        f"Generating {args.n = } measurements with timestamps between {start_unix_timestamp = } and {end_unix_timestamp = }..."
     )
 
     for i in range(args.n):
@@ -101,7 +94,6 @@ def main() -> int:
             "INSERT INTO measurements (streetlamp_id, timestamp, light_level) VALUES (?, ?, ?)",
             (streetlamp_id, timestamp, light_intensity),
         )
-
 
     db.commit()
     logger.info("Done!")

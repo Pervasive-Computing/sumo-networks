@@ -24,7 +24,8 @@ using namespace nlohmann::literals; // for ""_json
 // "2020-01-01T01:00:00Z"}, "id": 1}
 
 struct RequestParams {
-	int			streetlamp;
+	// long			streetlamp;
+    std::string streetlamp;
 	std::string reducer;
 	std::string per;
 	int			from; // unix timestamp
@@ -52,7 +53,10 @@ auto pformat(const Request& req) -> std::string {
 enum class ParseRequestError {
 	invalid_jsonrpc_version,
 	unknown_method,
-	invalid_params,
+    unkowwn_reducer,
+    unknown_per,
+    params_is_not_an_object,
+    from_is_newer_than_to,
 };
 
 auto parse_request(std::string_view req) -> tl::expected<Request, ParseRequestError> {
@@ -66,7 +70,7 @@ auto parse_request(std::string_view req) -> tl::expected<Request, ParseRequestEr
 		return tl::make_unexpected(ParseRequestError::unknown_method);
 	}
 	if (! j["params"].is_object()) {
-		return tl::make_unexpected(ParseRequestError::invalid_params);
+		return tl::make_unexpected(ParseRequestError::params_is_not_an_object);
 	}
 
 	// Convert to a Request object
@@ -75,10 +79,24 @@ auto parse_request(std::string_view req) -> tl::expected<Request, ParseRequestEr
 	r.method = j["method"];
 	r.id = j["id"];
 	r.params.streetlamp = j["params"]["streetlamp"];
-	r.params.reducer = j["params"]["reducer"];
-	r.params.per = j["params"]["per"];
-	r.params.from = j["params"]["from"];
-	r.params.to = j["params"]["to"];
+    const auto reducer = j["params"]["reducer"].get<std::string>();
+    if (reducer != "mean" && reducer != "median") {
+        return tl::make_unexpected(ParseRequestError::unkowwn_reducer);
+    }
+    const auto per = j["params"]["per"].get<std::string>();
+    if (per != "quarter" && per != "hour" && per != "day" && per != "week") {
+        return tl::make_unexpected(ParseRequestError::unknown_per);
+    }
+    const auto from = j["params"]["from"].get<int>();
+    const auto to = j["params"]["to"].get<int>();
+    if (from > to) {
+        return tl::make_unexpected(ParseRequestError::from_is_newer_than_to);
+    }
+
+	r.params.reducer = reducer;
+	r.params.per = per;
+	r.params.from = from;
+	r.params.to = to;
 
 	return r;
 }
@@ -90,7 +108,7 @@ struct Reply {
 };
 
 struct LightLevelMeasurement {
-	float light_level;
+	double light_level;
 	int	  timestamp;
 };
 
@@ -172,7 +190,7 @@ auto main(int argc, char** argv) -> int {
 		return 0;
 	}
 
-	spdlog::info("Found {} streetlamps in database", num_streetlamps);
+	spdlog::info("Found {} streetlamps in database {}", num_streetlamps, sqlite3_file_path.string());
 
 	zmq::context_t	  zmq_ctx;
 	zmq::socket_t	  sock(zmq_ctx, zmq::socket_type::rep);
@@ -235,14 +253,17 @@ auto main(int argc, char** argv) -> int {
 		spdlog::info("Received request: {}", pformat(*req));
 
 		// query database for light levels of the given streetlamp
-		sqlite3_bind_int(get_light_levels_between_stmt, 1, req->params.streetlamp);
+		// sqlite3_bind_int(get_light_levels_between_stmt, 1, req->params.streetlamp);
+        sqlite3_bind_text(get_light_levels_between_stmt, 1, req->params.streetlamp.c_str(), -1, SQLITE_STATIC);
 		sqlite3_bind_int(get_light_levels_between_stmt, 2, req->params.from);
 		sqlite3_bind_int(get_light_levels_between_stmt, 3, req->params.to);
 		std::vector<LightLevelMeasurement> measurements;
 		while (sqlite3_step(get_light_levels_between_stmt) == SQLITE_ROW) {
+            spdlog::info("sqlite3_step");
 			const auto light_level = sqlite3_column_double(get_light_levels_between_stmt, 0);
 			const auto timestamp = sqlite3_column_int(get_light_levels_between_stmt, 1);
-			measurements.emplace_back(light_level, timestamp);
+            measurements.push_back(LightLevelMeasurement{light_level, timestamp});
+			// measurements.emplace_back(light_level, timestamp);
 		}
 		sqlite3_reset(get_light_levels_between_stmt);
 

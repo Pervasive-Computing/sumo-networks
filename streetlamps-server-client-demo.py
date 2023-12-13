@@ -29,8 +29,7 @@ import tomllib
 def main() -> int:
     parser = argparse.ArgumentParser(prog=os.path.basename(__file__))
     parser.add_argument(
-        "-s", "--streetlamp-id", type=int, help="Streetlamp ID", default=-26043
-    )
+        "-s", "--streetlamp-id", type=str, help="Streetlamp ID")
     parser.add_argument(
         "-r",
         "--reducer",
@@ -96,9 +95,10 @@ def main() -> int:
                 },
                 "id": id,
             }
-            logger.info(f"Sending request: {request}")
+            print(f"{request = }")
+            # logger.info(f"Sending request: {request}")
             client.send(json.dumps(request).encode())
-            reply = client.recv()
+            reply = client.recv().decode()
             print(f"Received reply: {reply}")
             time.sleep(0.5)
     except KeyboardInterrupt:
