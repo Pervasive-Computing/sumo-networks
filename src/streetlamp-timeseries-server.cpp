@@ -51,6 +51,7 @@ auto pformat(const Request& req) -> std::string {
 }
 
 enum class ParseRequestError {
+    json_parse_error,
 	invalid_jsonrpc_version,
 	unknown_method,
     unkowwn_reducer,
@@ -61,8 +62,14 @@ enum class ParseRequestError {
 
 auto parse_request(std::string_view req) -> tl::expected<Request, ParseRequestError> {
 	// Convert to a json object
-	auto j = json::parse(req);
-	// Validate json-rpc 2.0 request
+	json j;
+    try {
+        j = json::parse(req);
+    } catch (const json::parse_error& e) {
+        return tl::make_unexpected(ParseRequestError::json_parse_error);
+    }
+
+    // Validate json-rpc 2.0 request
 	if (j["jsonrpc"] != "2.0") {
 		return tl::make_unexpected(ParseRequestError::invalid_jsonrpc_version);
 	}
@@ -92,6 +99,11 @@ auto parse_request(std::string_view req) -> tl::expected<Request, ParseRequestEr
     if (from > to) {
         return tl::make_unexpected(ParseRequestError::from_is_newer_than_to);
     }
+
+    // {
+    //     "datetime": "2020-01-01T00:00:00Z",
+    //     "streetlamps-ids": ["123456", "123457", "123458"],
+    // }
 
 	r.params.reducer = reducer;
 	r.params.per = per;
@@ -259,7 +271,6 @@ auto main(int argc, char** argv) -> int {
 		sqlite3_bind_int(get_light_levels_between_stmt, 3, req->params.to);
 		std::vector<LightLevelMeasurement> measurements;
 		while (sqlite3_step(get_light_levels_between_stmt) == SQLITE_ROW) {
-            spdlog::info("sqlite3_step");
 			const auto light_level = sqlite3_column_double(get_light_levels_between_stmt, 0);
 			const auto timestamp = sqlite3_column_int(get_light_levels_between_stmt, 1);
             measurements.push_back(LightLevelMeasurement{light_level, timestamp});
@@ -320,43 +331,6 @@ auto main(int argc, char** argv) -> int {
 			start = end;
 		}
 		assert(reduced_light_levels.size() == num_bins);
-		// for (const auto reduced : reduced_light_levels) {
-		// 	fmt::print("{} ", reduced);
-		// }
-		// fmt::print("\n");
-
-		// apply reducer to light levels
-		// if (req->params.reducer == "mean") {
-		//     // Figure out how many bins we need if "per" is "quarter|hour|day|week"
-		//     constexpr auto quarter_in_seconds = 15 * 60;
-		//     constexpr auto hour_in_seconds = 60 * 60;
-		//     constexpr auto day_in_seconds = 24 * hour_in_seconds;
-		//     constexpr auto week_in_seconds = 7 * day_in_seconds;
-
-		//     const auto num_bins = [&]() -> int {
-		//         if (req->params.per == "quarter") {
-		//             return (req->params.to - req->params.from) / quarter_in_seconds;
-		//         } else if (req->params.per == "hour") {
-		//             return (req->params.to - req->params.from) / hour_in_seconds;
-		//         } else if (req->params.per == "day") {
-		//             return (req->params.to - req->params.from) / day_in_seconds;
-		//         } else if (req->params.per == "week") {
-		//             return (req->params.to - req->params.from) / week_in_seconds;
-		//         } else {
-		//             spdlog::error("Invalid per: {}", req->params.per);
-		//             return 0;
-		//         }
-		//     }();
-
-		//     spdlog::info("num_bins: {}", num_bins);
-
-		//     // Reduce light levels to num_bins
-		//     for (int i = 0; i < num_bins; ++i) {
-
-		//     }
-
-		//     std::accumulate(light_levels.begin(), light_levels.end(), 0.0) / light_levels.size();
-		// }
 
 		reply.jsonrpc = req->jsonrpc;
 		reply.id = req->id;
