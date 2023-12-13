@@ -177,3 +177,7 @@ pyrightconfig.json
 *.out
 *.app
 # End of https://www.toptal.com/developers/gitignore/api/c++
+
+
+*.db
+*.sqlite3
