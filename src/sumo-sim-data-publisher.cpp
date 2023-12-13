@@ -561,7 +561,7 @@ namespace topics {
 
 struct Topic {
 	std::string name;
-	int			publish_rate = 0;
+	double		publish_rate = 0.0;
 	bool		enabled = false;
 };
 
@@ -591,9 +591,9 @@ auto main(int argc, char** argv) -> int {
 	// fmt::print("depends_on_cpp_version := {}\n", depends_on_cpp_version);
 
 	const auto argv_parser = create_argv_parser();
-	const auto print_help = [&]() -> void {
-		std::cerr << argv_parser;
-	};
+	// const auto print_help = [&]() -> void {
+	// 	std::cerr << argv_parser;
+	// };
 
 	const auto config = toml::parse_file(configuration_file_path.string());
 	const auto options = parse_configuration(config);
@@ -609,7 +609,7 @@ auto main(int argc, char** argv) -> int {
 
 	const auto topic_cars = Topic {
 		.name = config["topics"]["cars"].value_or("cars"),
-		.publish_rate = config["topics"]["cars"]["publish-rate"].value_or(0),
+		.publish_rate = config["topics"]["cars"]["publish-rate"].value_or(0.0),
 		.enabled = config["topics"]["cars"]["enabled"].value_or(false),
 	};
 
@@ -622,7 +622,7 @@ auto main(int argc, char** argv) -> int {
 
 	const auto topic_streetlamps = Topic {
 		.name = config["topics"]["streetlamps"].value_or("streetlamps"),
-		.publish_rate = config["topics"]["streetlamps"]["publish-rate"].value_or(0),
+		.publish_rate = config["topics"]["streetlamps"]["publish-rate"].value_or(0.0),
 		.enabled = config["topics"]["streetlamps"]["enabled"].value_or(false),
 	};
 
@@ -704,6 +704,9 @@ auto main(int argc, char** argv) -> int {
 	const int num_retries_sumo_sim_connect = 100;
 	libtraci::Simulation::init(options.sumo_port, num_retries_sumo_sim_connect, "localhost");
 	const double dt = libtraci::Simulation::getDeltaT();
+	spdlog::info("Connected to sumo simulation on port {}", options.sumo_port);
+	spdlog::info("dt: {}", dt);
+
 
 	auto streetlamps =
 		extract_streetlamps_from_osm(options.osm_path)
@@ -729,7 +732,6 @@ auto main(int argc, char** argv) -> int {
 	}
 
 	spdlog::info("streetlamps.size(): {}", streetlamps.size());
-	spdlog::info("dt: {}", dt);
 
 	auto bar = indicators::BlockProgressBar {
 		indicators::option::BarWidth {80},
@@ -868,6 +870,9 @@ auto main(int argc, char** argv) -> int {
 					spdlog::error("{}:{} Failed to publish data on topic {}", __FILE__, __LINE__,
 								topics::cars);
 				}
+
+				last_publish_time = now;
+				spdlog::info("Published data on topic {} after {} ms", topics::cars, elapsed.count());
 			}
 		}
 
@@ -878,19 +883,31 @@ auto main(int argc, char** argv) -> int {
 		multi_future.wait();
 
 		{ // Publish information about which street lamps that have vehicles nearby
-			json array = json::array();
-			for (int idx = 0; idx < num_streetlamps_with_vehicles_nearby; idx++) {
-				array.push_back(streetlamp_ids_with_vehicles_nearby[idx]);
-			}
-			// Serialize to CBOR encoding format
-			const std::vector<u8> v = json::to_cbor(array);
-			const std::string	  payload(v.begin(), v.end());
-			// Send the data to all clients
-			const auto flags = zmq::send_flags::none;
-			const auto send_result = sock.send(zmq::buffer(topics::streetlamps + payload), flags);
-			if (! send_result.has_value()) {
-				spdlog::error("{}:{} Failed to publish data on topic {}", __FILE__, __LINE__,
-							  topics::streetlamps);
+			static auto last_publish_time = std::chrono::high_resolution_clock::now();
+			const auto now = std::chrono::high_resolution_clock::now();
+			const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now -
+																						 last_publish_time);
+			// Convert HZ to milliseconds
+			const auto configured_publish_freq = 1000 / topic_streetlamps.publish_rate;
+			// spdlog::info("configured_publish_freq: {} elapsed.count() {}", configured_publish_freq, elapsed.count());
+			if (elapsed.count() >= configured_publish_freq) {
+				// spdlog::info()
+				json array = json::array();
+				for (int idx = 0; idx < num_streetlamps_with_vehicles_nearby; ++idx) {
+					array.push_back(streetlamp_ids_with_vehicles_nearby[idx]);
+				}
+				// Serialize to CBOR encoding format
+				const std::vector<u8> v = json::to_cbor(array);
+				const std::string	  payload(v.begin(), v.end());
+				// Send the data to all clients
+				const auto flags = zmq::send_flags::none;
+				const auto send_result = sock.send(zmq::buffer(topics::streetlamps + payload), flags);
+				if (! send_result.has_value()) {
+					spdlog::error("{}:{} Failed to publish data on topic {}", __FILE__, __LINE__,
+								topics::streetlamps);
+				}
+				last_publish_time = now;
+				spdlog::info("Published data on topic {} after {} ms", topics::streetlamps, elapsed.count());
 			}
 		}
 

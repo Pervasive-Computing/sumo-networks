@@ -8,6 +8,7 @@ osm-path = "horsens/horsens.osm"
 simulation-steps = 100000
 deallocate-inactive-cars-every = 10000    # in simulation steps
 start-datetime = 1979-05-27T07:32:00Z
+delay-per-simulated-second = 0.1 # in seconds
 
 [sumo.spawn]
 enabled = true
@@ -19,12 +20,12 @@ distance-threshold = 50 # in meters
 [topics.cars]
 enabled = true
 name = "cars"
-publish-rate = 5 # in Hz
+publish-rate = 1 # in Hz
 
 [topics.streetlamps]
 enabled = true
 name = "streetlamps"
-publish-rate = 10    # in Hz
+publish-rate = 0.5    # in Hz
 
 
 [server.streetlamps]

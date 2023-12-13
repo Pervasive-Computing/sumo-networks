@@ -209,7 +209,7 @@ auto main(int argc, char** argv) -> int {
 	const auto		  port = config["server"]["streetlamps"]["port"].value_or(13000);
 	const std::string addr = fmt::format("tcp://*:{}", port);
 	sock.bind(addr);
-	spdlog::info("Bound zmq PUB socket to {}", addr);
+	spdlog::info("Bound zmq REP socket to {}", addr);
 
 	const auto send = [&](std::string_view msg) {
 		zmq::message_t reply(msg.size());
