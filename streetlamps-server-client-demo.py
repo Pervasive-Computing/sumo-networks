@@ -1,22 +1,15 @@
 #!/usr/bin/env -S pixi run python3
 
 import argparse
+import json
 import os
-import sqlite3
 import sys
 import time
-import xml.etree.ElementTree as ET
-from dataclasses import asdict, astuple, dataclass
-from pathlib import Path
-import json
-import random
 from datetime import datetime, timedelta
+from pathlib import Path
 
-from faker import Faker
-from loguru import logger
-from result import Err, Ok, Result, is_err, is_ok
 import zmq
-
+from loguru import logger
 
 # Check if rich is installed, and only import it if it is.
 try:
@@ -32,11 +25,32 @@ if version_info.major < 3 or version_info.minor < 11:
     sys.exit(1)
 import tomllib
 
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog=os.path.basename(__file__))
+    parser.add_argument(
+        "-s", "--streetlamp-id", type=int, help="Streetlamp ID", default=-26043
+    )
+    parser.add_argument(
+        "-r",
+        "--reducer",
+        type=str,
+        help="Reducer",
+        default="mean",
+        choices=["mean", "median"],
+    )
+    parser.add_argument(
+        "-p",
+        "--per",
+        type=str,
+        help="Per",
+        default="hour",
+        choices=["quarter", "hour", "day", "week"],
+    )
 
     args = parser.parse_args()
     print(f"{args = }")
+
     config_file_path = Path("config.toml")
     if not config_file_path.exists():
         logger.error(f"Cannot find `{config_file_path}`")
@@ -62,7 +76,6 @@ def main() -> int:
     try:
         while True:
             id += 1
-
             # Expect a json-rpc 2.0 request
             # {"jsonrpc": "2.0", "method": "lightlevel", "params": {"streetlamp": "123456", "reducer":
             # "mean|median", "per": "quarter|hour|day|week", "from": "1702396387", "to":
@@ -70,16 +83,14 @@ def main() -> int:
             now = datetime.now()
             to_unix_ts = int(now.timestamp())
             from_unix_ts = int((now - timedelta(days=1)).timestamp())
-            # streetlamp_id = random.randint(0, 2**16)
-            streetlamp_id: int = -26043
 
-            request= {
+            request = {
                 "jsonrpc": "2.0",
                 "method": "lightlevel",
                 "params": {
-                    "streetlamp": streetlamp_id,
-                    "reducer": "mean",
-                    "per": "hour",
+                    "streetlamp": args.streetlamp_id,
+                    "reducer": args.reducer,
+                    "per": args.per,
                     "from": from_unix_ts,
                     "to": to_unix_ts,
                 },
@@ -99,8 +110,5 @@ def main() -> int:
     return 0
 
 
-    return 0
-
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

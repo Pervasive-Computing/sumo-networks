@@ -79,7 +79,8 @@ def main() -> int:
         cursor.execute("SELECT id FROM streetlamps")
         streetlamp_ids = [id for (id,) in cursor.fetchall()]
 
-    end_datetime = datetime(2023, 12, 12)
+    # end_datetime = datetime(2023, 12, 12)
+    end_datetime = datetime.now()
     end_unix_timestamp = int(end_datetime.timestamp())
     # Generate random unix timestamps from `end_datetime` to `end_datetime - 1 week`
     start_datetime = end_datetime - timedelta(weeks=1)

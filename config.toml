@@ -5,8 +5,8 @@ port = 12000
 port = 10000
 sumocfg-path = "horsens/horsens.sumocfg"
 osm-path = "horsens/horsens.osm"
-simulation-steps = 10000
-deallocate-inactive-cars-every = 1000    # in simulation steps
+simulation-steps = 100000
+deallocate-inactive-cars-every = 10000    # in simulation steps
 
 [sumo.spawn]
 enabled = true
