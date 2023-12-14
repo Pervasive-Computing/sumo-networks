@@ -2,12 +2,8 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use anyhow::Result;
-use log;
-use rusqlite;
 use serde::{Deserialize, Serialize};
-use serde_cbor;
-use zmq;
-
+// use zmq;
 
 // {
 //     timestamp: 1234567890,
@@ -23,7 +19,6 @@ struct Message {
     timestamp: i64,
     changes: BTreeMap<i64, f32>,
 }
-
 
 fn main() -> Result<()> {
     env_logger::init();
@@ -51,8 +46,8 @@ fn main() -> Result<()> {
             db_file_path.display()
         ));
     }
-    let mut connection = rusqlite::Connection::open(db_file_path)
-        .expect(format!("Failed to open {}", db_file_path.display()).as_str());
+    let connection = rusqlite::Connection::open(db_file_path)
+        .unwrap_or_else(|_| panic!("Failed to open {}", db_file_path.display()));
 
     let query = "INSERT INTO measurements (streetlamp_id, timestamp, light_level) VALUES (:streetlamp_id, :timestamp, :light_level)";
     // let insert_statement = connection
@@ -64,20 +59,25 @@ fn main() -> Result<()> {
     loop {
         let message = subscriber_socket.recv_bytes(0).unwrap();
         let payload = &message[topic.len()..]; // Remove the topic from the message
-        let message: Message = serde_cbor::from_slice(payload).expect("Failed to decode CBOR message");
-        log::info!("Received message with timestamp {} and {} changes", message.timestamp, message.changes.len());
+        let message: Message =
+            serde_cbor::from_slice(payload).expect("Failed to decode CBOR message");
+        log::info!(
+            "Received message with timestamp {} and {} changes",
+            message.timestamp,
+            message.changes.len()
+        );
 
         // TODO: figure out how to use a prepared statement here with transaction
         let mut insert_statement = connection.prepare_cached(query)?;
         // let mut transaction = connection.transaction()?;
         connection.execute_batch("BEGIN")?;
         for (streetlamp_id, light_level) in message.changes {
-            insert_statement.execute(
-                rusqlite::named_params! {
-                    ":streetlamp_id": streetlamp_id.to_string(),
-                    ":timestamp": message.timestamp,
-                    ":light_level": light_level,}
-            ).expect("Failed to execute SQL statement");
+            insert_statement
+                .execute(rusqlite::named_params! {
+                ":streetlamp_id": streetlamp_id.to_string(),
+                ":timestamp": message.timestamp,
+                ":light_level": light_level,})
+                .expect("Failed to execute SQL statement");
         }
         connection.execute_batch("COMMIT")?;
         // transaction.commit()?;
