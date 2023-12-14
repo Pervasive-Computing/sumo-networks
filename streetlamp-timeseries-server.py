@@ -104,8 +104,10 @@ def close_connection(exception) -> None:
         db.close()
 
 
-@app.route("/streetlamp/<int:streetlamp_id>/lightlevels", methods=["GET"])
-def get_timeseries(streetlamp_id: int) -> Response:
+@app.route("/streetlamp/<string:streetlamp_id>/lightlevels", methods=["GET"])
+def get_timeseries(streetlamp_id: str) -> Response:
+    streetlamp_id = int(streetlamp_id)
+    logger.info(f"{streetlamp_id = }")
     logger.debug(f"{request.url = }")
     if args.debug:
         for k, v in request.args.items():
