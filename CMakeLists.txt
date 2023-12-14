@@ -63,6 +63,8 @@ find_package(bshoshany-thread-pool REQUIRED)
 list(APPEND external_library_targets bshoshany-thread-pool::bshoshany-thread-pool)
 find_package(SQLite3 REQUIRED)
 list(APPEND external_library_targets SQLite::SQLite3)
+# find_package(date REQUIRED)
+
 
 message(STATUS "external_library_targets:")
 foreach(external_library_target ${external_library_targets})

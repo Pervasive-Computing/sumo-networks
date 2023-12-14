@@ -20,6 +20,7 @@ tomlplusplus/3.4.0
 bshoshany-thread-pool/3.5.0
 catch2/3.4.0
 sqlite3/3.44.2
+# date/3.0.1
 
 [generators]
 CMakeToolchain

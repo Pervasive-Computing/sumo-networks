@@ -2,6 +2,7 @@
 #include <chrono>
 #include <charconv>
 #include <cmath>
+#include <ctime>
 using namespace std::chrono_literals;
 #include <cmath>
 #include <filesystem>
@@ -554,6 +555,85 @@ auto pprint(const Topic& topic) -> void {
 	fmt::println("{}", pformat(topic));
 }
 
+// auto date_time_to_unix_timestamp(const toml::date_time& dt) -> std::uint64_t {
+// 	const auto year = dt.date.year - 1900;
+// 	const auto month = dt.date.month - 1;
+// 	const auto day = dt.date.day;
+// 	const auto hour = dt.time.hour;
+// 	const auto minute = dt.time.minute;
+// 	const auto second = dt.time.second;
+
+
+// }
+
+bool is_leap_year(int year) {
+    return ((year % 4 == 0) && (year % 100 != 0)) || (year % 400 == 0);
+}
+
+int days_in_month(int year, int month) {
+    static const int days_per_month[] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+    if (month == 2 && is_leap_year(year)) {
+        return 29;
+    }
+    return days_per_month[month - 1];
+}
+
+auto date_time_to_unix_timestamp(const toml::date_time& dt) -> std::uint64_t {
+    const auto year = dt.date.year;
+    const auto month = dt.date.month;
+    const auto day = dt.date.day;
+    const auto hour = dt.time.hour;
+    const auto minute = dt.time.minute;
+    const auto second = dt.time.second;
+
+    if (year < 1970) {
+        throw std::runtime_error("Year is before Unix epoch (1970)");
+    }
+
+    std::uint64_t total_days = 0;
+
+    // Days for years
+    for (int y = 1970; y < year; ++y) {
+        total_days += is_leap_year(y) ? 366 : 365;
+    }
+
+    // Days for months
+    for (int m = 1; m < month; ++m) {
+        total_days += days_in_month(year, m);
+    }
+
+    // Days for current month
+    total_days += (day - 1);
+
+    // Convert everything to seconds
+    std::uint64_t total_seconds = total_days * 24 * 3600;
+    total_seconds += hour * 3600;
+    total_seconds += minute * 60;
+    total_seconds += second;
+
+    return total_seconds;
+}
+
+// auto date_time_to_unix_timestamp(const toml::date_time& dt) -> std::uint64_t {
+//     std::tm time = {};
+//     time.tm_year = dt.date.year - 1900;  // tm_year is years since 1900
+//     time.tm_mon = dt.date.month - 1;     // tm_mon is 0-based
+//     time.tm_mday = dt.date.day;          // tm_mday is 1-based
+//     time.tm_hour = dt.time.hour;
+//     time.tm_min = dt.time.minute;
+//     time.tm_sec = dt.time.second;
+
+//     // Convert to time_t (seconds since Unix epoch)
+//     std::time_t time_since_epoch = std::mktime(&time);
+
+//     // Check for conversion error
+//     if (time_since_epoch == -1) {
+//         throw std::runtime_error("Failed to convert date_time to Unix timestamp");
+//     }
+
+//     return static_cast<std::uint64_t>(time_since_epoch);
+// }
+
 auto main() -> int {
 	const auto config_file_path = std::filesystem::path("config.toml");
 	if (! std::filesystem::exists(config_file_path)) {
@@ -712,7 +792,20 @@ auto main() -> int {
 
 	int do_deallocation_pass_at_step = do_deallocation_pass_every_n_steps;
 
-	// const auto t_sim_start = std::chrono::high_resolution_clock::now();
+	const auto start_datetime = [&] {
+		const auto start_datetime = config["sumo"]["start-datetime"];
+		if (!start_datetime.is_date_time()) {
+			spdlog::error("field: sumo.start-datetime in {} must be a date-time", "config.toml");
+			std::exit(1);
+		}
+		return start_datetime.value<toml::date_time>().value();
+	}();
+
+	const auto start_timestamp = date_time_to_unix_timestamp(start_datetime);
+	spdlog::info("start_timestamp: {}", start_timestamp);
+
+	std::cout << "start_datetime: " << start_datetime.date << ' ' << start_datetime.time << '\n';
+
 	const auto sim_timer = Timer {};
 
 	for (int simulation_step = 0; simulation_step < options.simulation_steps; ++simulation_step) {
@@ -792,9 +885,7 @@ auto main() -> int {
 			const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now -
 																						 last_publish_time);
 			// Convert HZ to milliseconds
-
 			// e.g. publish_rate = 10 Hz
-
 			const auto configured_publish_freq = 1000 / topic_cars.publish_rate;
 			if (elapsed.count() >= configured_publish_freq) {
 				json j; // { "1": { "x": 1, "y": 2, "heading": 3 }, "2": { "x": 1, "y": 2, "heading": 3 } }
@@ -837,11 +928,19 @@ auto main() -> int {
 			const auto configured_publish_freq = 1000 / topic_streetlamps.publish_rate;
 			// spdlog::info("configured_publish_freq: {} elapsed.count() {}", configured_publish_freq, elapsed.count());
 			if (elapsed.count() >= configured_publish_freq) {
-				// spdlog::info()
+				const auto elapsed_sim_time = dt * simulation_step;
+				const auto timestamp = start_timestamp + std::lround(elapsed_sim_time);
+				// Create a ISO 8601 datetime string from start_datetime + elapsed_sim_time
+				// const auto datetime = start_datetime + std::chrono::seconds(std::lround(elapsed_sim_time));
+				// spdlog::info("datetime: {}", datetime);
+				json j {
+					{"timestamp", timestamp},
+				};
 				json array = json::array();
 				for (int idx = 0; idx < num_streetlamps_with_vehicles_nearby; ++idx) {
 					array.push_back(streetlamp_ids_with_vehicles_nearby[idx]);
 				}
+				j["streetlamps"] = array;
 				// Serialize to CBOR encoding format
 				const std::vector<u8> v = json::to_cbor(array);
 				const std::string	  payload(v.begin(), v.end());
@@ -862,9 +961,6 @@ auto main() -> int {
 				static_cast<double>(simulation_step) / options.simulation_steps * 100.0;
 			bar.set_progress(percent_done);
 			if (options.verbose) {
-				// const auto t_end = std::chrono::high_resolution_clock::now();
-				// const auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t_end
-				// - t_start);
 				const auto duration = sim_step_timer.elapsed_us();
 				// Estimate the remaining time of the simulation
 				static long duration_avg = 0;
