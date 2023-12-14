@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.23 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.21 FATAL_ERROR)
 project(sumo-sim-data-publisher VERSION 0.1.0 LANGUAGES CXX) # ${PROJECT_NAME}
 
 # Set default build type to release
