@@ -120,12 +120,18 @@ def get_timeseries(streetlamp_id: int) -> Response:
             return jsonify({"error": "unknown reducer"})
 
     match request.args.get("per", default="hour"):
+        case "minute":
+            per = timedelta(minutes=1)
+        case "quarter":
+            per = timedelta(minutes=15)
         case "hour":
             per = timedelta(hours=1)
         case "day":
             per = timedelta(days=1)
         case "week":
             per = timedelta(weeks=1)
+        case "month":
+            per = timedelta(days=30)
         case _:
             return jsonify({"error": "unknown per"})
 
