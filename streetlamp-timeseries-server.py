@@ -164,7 +164,7 @@ def get_timeseries(streetlamp_id: str) -> Response:
     # cursor.execute("select * from streetlamps;")
     rows = cursor.fetchall()
     measurements = [LightLevelMeasurement(*row) for row in rows]
-    # logger.debug(f"{measurements = }")
+    logger.debug(f"{len(measurements) = }")
 
     num_bins: int = int((end - start) / per.seconds)
     logger.debug(f"{num_bins = }")
@@ -190,7 +190,6 @@ def get_timeseries(streetlamp_id: str) -> Response:
         len(reduced_light_levels) == num_bins
     ), f"{len(reduced_light_levels) = } != {num_bins = }"
 
-    # logger.debug(f"{reduced_light_levels = }")
     return jsonify(reduced_light_levels)
 
 
