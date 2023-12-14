@@ -1,17 +1,14 @@
 #!/usr/bin/env -S pixi run python3
 
 import argparse
-import json
 import os
 import sqlite3
 import sys
-import time
 from dataclasses import asdict, astuple, dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Protocol
 
-import flask
 import tomllib
 from flask import Flask, Response, g, jsonify, request
 from loguru import logger

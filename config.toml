@@ -1,14 +1,13 @@
 verbose = false
-port = 12000
 
 [sumo]
 port = 10000
 sumocfg-path = "horsens/horsens.sumocfg"
 osm-path = "horsens/horsens.osm"
 simulation-steps = 100000
-deallocate-inactive-cars-every = 10000    # in simulation steps
+deallocate-inactive-cars-every = 10000   # in simulation steps
 start-datetime = 1979-05-27T07:32:00Z
-delay-per-simulated-second = 0.1 # in seconds
+delay-per-simulated-second = 0.1         # in seconds
 
 [sumo.spawn]
 enabled = true
@@ -17,15 +16,18 @@ gui = false
 [sumo.streetlamps]
 distance-threshold = 50 # in meters
 
-[topics.cars]
+[sumo.publisher]
+port = 12000
+
+[sumo.publisher.topics.cars]
 enabled = true
 name = "cars"
 publish-rate = 1 # in Hz
 
-[topics.streetlamps]
+[sumo.publisher.topics.streetlamps]
 enabled = true
 name = "streetlamps"
-publish-rate = 0.5    # in Hz
+publish-rate = 0.5   # in Hz
 
 
 [server.streetlamps]

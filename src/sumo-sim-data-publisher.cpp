@@ -48,8 +48,6 @@ using namespace nlohmann::literals; // for ""_json
 #include "pretty-printers.hpp"
 #include "streetlamp.hpp"
 
-using namespace libtraci; // TODO: remove
-
 using u8 = std::uint8_t;
 using u16 = std::uint16_t;
 using u32 = std::uint32_t;
@@ -81,14 +79,6 @@ using f64 = double;
 //     </gui_only>
 // </configuration>
 
-
-// static inline void show_console_cursor(bool const show) {
-//   std::fputs(show ? "\033[?25h" : "\033[?25l", stdout);
-// }
-
-// static inline void erase_line() {
-//   std::fputs("\r\033[K", stdout);
-// }
 
 class Timer {
   public:
@@ -464,22 +454,9 @@ auto between(const int x, const int min, const int max) -> bool {
 
 // auto parse_configuration(const std::filesystem::path& configuration_file_path) -> ProgramOptions
 // {
-auto parse_configuration(const toml::parse_result& config) -> ProgramOptions {
-	// const auto config = [&]() {
-	// 	try {
-	// 		const auto config = toml::parse("config.toml");
-	// 		return config;
-	// 	}
-	// 	catch (const toml::parse_error& err) {
-	// 		std::cerr << "Parsing error: " << err << "\n";
-	// 		std::exit(1);
-	// 		// Handle error...
-	// 	}
-	// }();
-
-
+auto parse_config(const toml::parse_result& config) -> ProgramOptions {
 	// const auto config = toml::parse_file(configuration_file_path.string());
-	const auto port = config["port"].value_or(10001);
+	const auto port = config["sumo"]["publisher"]["port"].value_or(10001);
 	if (! between(port, 0, std::numeric_limits<u16>::max())) {
 		spdlog::error("port must be between 0 and {}", std::numeric_limits<u16>::max());
 		std::exit(1);
@@ -554,15 +531,18 @@ auto parse_configuration(const toml::parse_result& config) -> ProgramOptions {
 	};
 }
 
-namespace topics {
-	static const auto cars = std::string("cars");
-	static const auto streetlamps = std::string("streetlamps");
-}; // namespace topics
-
 struct Topic {
 	std::string name;
 	double		publish_rate = 0.0;
 	bool		enabled = false;
+
+	Topic(const std::string& name, double publish_rate, bool enabled)
+	: name(name), publish_rate(publish_rate), enabled(enabled) {
+		if (this->publish_rate < 0.0) {
+			spdlog::error("publish_rate must be positive");
+			std::exit(1);
+		}
+	}
 };
 
 auto pformat(const Topic& topic) -> std::string {
@@ -574,63 +554,30 @@ auto pprint(const Topic& topic) -> void {
 	fmt::println("{}", pformat(topic));
 }
 
-auto main(int argc, char** argv) -> int {
-	const auto configuration_file_path = std::filesystem::path("config.toml");
-	if (! std::filesystem::exists(configuration_file_path)) {
-		spdlog::error("Configuration file not found: {}", configuration_file_path.string());
+auto main() -> int {
+	const auto config_file_path = std::filesystem::path("config.toml");
+	if (! std::filesystem::exists(config_file_path)) {
+		spdlog::error("Configuration file not found: {}", config_file_path.string());
 		std::exit(1);
 	}
-	// const auto config = toml::parse_file("configuration.toml");
-	// you can also iterate more 'traditionally' using a ranged-for
-	// get key-value pairs
-	// std::string_view library_name = config["library"]["name"].value_or(""sv);
-	// std::string_view library_author = config["library"]["authors"][0].value_or(""sv);
-	// int64_t depends_on_cpp_version = config["dependencies"]["cpp"].value_or(0);
-	// fmt::print("library_name := {}\n", library_name);
-	// fmt::print("library_author := {}\n", library_author);
-	// fmt::print("depends_on_cpp_version := {}\n", depends_on_cpp_version);
 
-	const auto argv_parser = create_argv_parser();
-	// const auto print_help = [&]() -> void {
-	// 	std::cerr << argv_parser;
-	// };
-
-	const auto config = toml::parse_file(configuration_file_path.string());
-	const auto options = parse_configuration(config);
-	// const auto options = parse_args(argv_parser, argc, argv)
-	// 						 .map_error([&](const auto& err) {
-	// 							 spdlog::error("{}", err);
-	// 							 print_help();
-	// 							 std::exit(2);
-	// 						 })
-	//  .value();
+	const auto config = toml::parse_file(config_file_path.string());
+	const auto options = parse_config(config);
 
 	pprint(options);
 
 	const auto topic_cars = Topic {
-		.name = config["topics"]["cars"].value_or("cars"),
-		.publish_rate = config["topics"]["cars"]["publish-rate"].value_or(0.0),
-		.enabled = config["topics"]["cars"]["enabled"].value_or(false),
+		config["sumo"]["publisher"]["topics"]["cars"].value_or("cars"),
+		config["sumo"]["publisher"]["topics"]["cars"]["publish-rate"].value_or(0.0),
+		config["sumo"]["publisher"]["topics"]["cars"]["enabled"].value_or(false),
 	};
-
-	if (topic_cars.publish_rate <= 0) {
-		spdlog::error("topics.cars.publish-rate must be positive");
-		std::exit(1);
-	}
-
 	pprint(topic_cars);
 
 	const auto topic_streetlamps = Topic {
-		.name = config["topics"]["streetlamps"].value_or("streetlamps"),
-		.publish_rate = config["topics"]["streetlamps"]["publish-rate"].value_or(0.0),
-		.enabled = config["topics"]["streetlamps"]["enabled"].value_or(false),
+		config["sumo"]["publisher"]["topics"]["streetlamps"].value_or("streetlamps"),
+		config["sumo"]["publisher"]["topics"]["streetlamps"]["publish-rate"].value_or(0.0),
+		config["sumo"]["publisher"]["topics"]["streetlamps"]["enabled"].value_or(false),
 	};
-
-	if (topic_streetlamps.publish_rate <= 0) {
-		spdlog::error("topics.streetlamps.publish-rate must be positive");
-		std::exit(1);
-	}
-
 	pprint(topic_streetlamps);
 
 	const auto sumo_home_path = [&]() {
@@ -660,7 +607,6 @@ auto main(int argc, char** argv) -> int {
 		spdlog::debug("cwd: {}", cwd.string());
 		spdlog::debug("sumocfg: {}", options.sumocfg_path.string());
 	}
-
 
 	// Parse the SUMO configuration file
 	const auto sumocfg = parse_sumocfg(options.sumocfg_path)
@@ -865,14 +811,14 @@ auto main(int argc, char** argv) -> int {
 				const std::string	  payload(v.begin(), v.end());
 				// Publish the data to all clients
 				const auto flags = zmq::send_flags::none;
-				const auto send_result = sock.send(zmq::buffer(topics::cars + payload), flags);
+				const auto send_result = sock.send(zmq::buffer(topic_cars.name + payload), flags);
 				if (! send_result.has_value()) {
 					spdlog::error("{}:{} Failed to publish data on topic {}", __FILE__, __LINE__,
-								topics::cars);
+								topic_cars.name);
 				}
 
 				last_publish_time = now;
-				spdlog::info("Published data on topic {} after {} ms", topics::cars, elapsed.count());
+				spdlog::info("Published data on topic {} after {} ms", topic_cars.name, elapsed.count());
 			}
 		}
 
@@ -901,13 +847,13 @@ auto main(int argc, char** argv) -> int {
 				const std::string	  payload(v.begin(), v.end());
 				// Send the data to all clients
 				const auto flags = zmq::send_flags::none;
-				const auto send_result = sock.send(zmq::buffer(topics::streetlamps + payload), flags);
+				const auto send_result = sock.send(zmq::buffer(topic_streetlamps.name + payload), flags);
 				if (! send_result.has_value()) {
 					spdlog::error("{}:{} Failed to publish data on topic {}", __FILE__, __LINE__,
-								topics::streetlamps);
+								topic_streetlamps.name);
 				}
 				last_publish_time = now;
-				spdlog::info("Published data on topic {} after {} ms", topics::streetlamps, elapsed.count());
+				spdlog::info("Published data on topic {} after {} ms", topic_streetlamps.name, elapsed.count());
 			}
 		}
 
@@ -939,7 +885,7 @@ auto main(int argc, char** argv) -> int {
 	bar.mark_as_completed();
 	indicators::show_console_cursor(true);
 
-	Simulation::close();
+	libtraci::Simulation::close();
 
 	spdlog::info("Simulation took: {}", humantime(sim_timer.elapsed_us()));
 
