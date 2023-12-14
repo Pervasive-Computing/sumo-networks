@@ -45,10 +45,11 @@ if args.verbose:
     logger.remove()
     logger.add(sys.stderr, level="INFO")
 
-if args.debug:
-    logger.remove()
-    logger.add(sys.stderr, level="DEBUG")
-    logger.debug(f"{args = }")
+# if args.debug:
+#     print("gotta debug")
+#     logger.remove()
+#     logger.add(sys.stderr, level="DEBUG")
+#     logger.debug(f"{args = }")
 
 
 class Reducer(Protocol):
@@ -158,7 +159,7 @@ def get_timeseries(streetlamp_id: int) -> Response:
     # cursor.execute("select * from streetlamps;")
     rows = cursor.fetchall()
     measurements = [LightLevelMeasurement(*row) for row in rows]
-    logger.debug(f"{measurements = }")
+    # logger.debug(f"{measurements = }")
 
     num_bins: int = int((end - start) / per.seconds)
     logger.debug(f"{num_bins = }")
@@ -184,7 +185,7 @@ def get_timeseries(streetlamp_id: int) -> Response:
         len(reduced_light_levels) == num_bins
     ), f"{len(reduced_light_levels) = } != {num_bins = }"
 
-    logger.debug(f"{reduced_light_levels = }")
+    # logger.debug(f"{reduced_light_levels = }")
     return jsonify(reduced_light_levels)
 
 
