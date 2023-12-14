@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use anyhow::Result;
+use env_logger::fmt::Timestamp;
 use serde::{Deserialize, Serialize};
 // use zmq;
 
@@ -62,8 +63,9 @@ fn main() -> Result<()> {
         let message: Message =
             serde_cbor::from_slice(payload).expect("Failed to decode CBOR message");
         log::info!(
-            "Received message with timestamp {} and {} changes",
+            "Received message with timestamp {} (datetime: {}) and {} changes",
             message.timestamp,
+            chrono::NaiveDateTime::from_timestamp_opt(message.timestamp, 0).unwrap(),
             message.changes.len()
         );
 
