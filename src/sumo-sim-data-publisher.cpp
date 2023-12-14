@@ -942,7 +942,7 @@ auto main() -> int {
 				}
 				j["streetlamps"] = array;
 				// Serialize to CBOR encoding format
-				const std::vector<u8> v = json::to_cbor(array);
+				const std::vector<u8> v = json::to_cbor(j);
 				const std::string	  payload(v.begin(), v.end());
 				// Send the data to all clients
 				const auto flags = zmq::send_flags::none;
