@@ -288,69 +288,72 @@ auto pprint(const ProgramOptions& options) -> void {
 	return argv_parser;
 }
 
-auto parse_args(argparse::ArgumentParser argv_parser, int argc, char** argv)
-	-> tl::expected<ProgramOptions, std::string> {
-	try {
-		argv_parser.parse_args(argc, argv);
-	} catch (const std::exception& err) {
-		return tl::unexpected(fmt::format("{}", err.what()));
-	}
+// auto parse_args(argparse::ArgumentParser argv_parser, int argc, char** argv)
+// 	-> tl::expected<ProgramOptions, std::string> {
+// 	try {
+// 		argv_parser.parse_args(argc, argv);
+// 	} catch (const std::exception& err) {
+// 		return tl::unexpected(fmt::format("{}", err.what()));
+// 	}
 
-	// If sumocfg is not set in the command line, search for all files in
-	// cwd/**/*.sumocfg and print them
-	const int port = argv_parser.get<int>("port");
-	if (port < 0 || port > std::pow(2, 16) - 1) {
-		return tl::unexpected(fmt::format("--port must be between 0 and {}", std::pow(2, 16) - 1));
-	}
+// 	// If sumocfg is not set in the command line, search for all files in
+// 	// cwd/**/*.sumocfg and print them
+// 	const int port = argv_parser.get<int>("port");
+// 	if (port < 0 || port > std::pow(2, 16) - 1) {
+// 		return tl::unexpected(fmt::format("--port must be between 0 and {}", std::pow(2, 16) - 1));
+// 	}
 
-	const int sumo_port = argv_parser.get<int>("sumo-port");
-	if (sumo_port < 0 || sumo_port > std::pow(2, 16) - 1) {
-		return tl::unexpected(
-			fmt::format("--sumo-port must be between 0 and {}", std::pow(2, 16) - 1));
-	}
+// 	const int sumo_port = argv_parser.get<int>("sumo-port");
+// 	if (sumo_port < 0 || sumo_port > std::pow(2, 16) - 1) {
+// 		return tl::unexpected(
+// 			fmt::format("--sumo-port must be between 0 and {}", std::pow(2, 16) - 1));
+// 	}
 
-	if (port == sumo_port) {
-		return tl::unexpected("--port and --sumo-port must be different");
-	}
+// 	if (port == sumo_port) {
+// 		return tl::unexpected("--port and --sumo-port must be different");
+// 	}
 
-	const i32 simulation_steps = argv_parser.get<int>("simulation-steps");
-	if (simulation_steps <= 0) {
-		return tl::unexpected("simulation-steps must be positive");
-	}
+// 	const i32 simulation_steps = argv_parser.get<int>("simulation-steps");
+// 	if (simulation_steps <= 0) {
+// 		return tl::unexpected("simulation-steps must be positive");
+// 	}
 
-	const auto sumocfg_path = std::filesystem::absolute(argv_parser.get<std::string>("sumocfg"));
-	if (! std::filesystem::exists(sumocfg_path)) {
-		return tl::unexpected(
-			fmt::format("SUMO configuration file not found: {}", sumocfg_path.filename().string()));
-	}
+// 	const auto sumocfg_path = std::filesystem::absolute(argv_parser.get<std::string>("sumocfg"));
+// 	if (! std::filesystem::exists(sumocfg_path)) {
+// 		return tl::unexpected(
+// 			fmt::format("SUMO configuration file not found: {}", sumocfg_path.filename().string()));
+// 	}
 
-	if (! (sumocfg_path.has_extension()) || sumocfg_path.extension().string() != ".sumocfg") {
-		return tl::unexpected(
-			fmt::format("SUMO configuration file must have extension .sumocfg, not {}",
-						sumocfg_path.extension().string()));
-	}
+// 	if (! (sumocfg_path.has_extension()) || sumocfg_path.extension().string() != ".sumocfg") {
+// 		return tl::unexpected(
+// 			fmt::format("SUMO configuration file must have extension .sumocfg, not {}",
+// 						sumocfg_path.extension().string()));
+// 	}
 
-	const auto osm_path = std::filesystem::absolute(argv_parser.get<std::string>("osm"));
-	if (! std::filesystem::exists(osm_path)) {
-		return tl::unexpected(
-			fmt::format("OSM configuration file not found: {}", osm_path.filename().string()));
-	}
+// 	const auto osm_path = std::filesystem::absolute(argv_parser.get<std::string>("osm"));
+// 	if (! std::filesystem::exists(osm_path)) {
+// 		return tl::unexpected(
+// 			fmt::format("OSM configuration file not found: {}", osm_path.filename().string()));
+// 	}
 
-	if (! (osm_path.has_extension()) || osm_path.extension().string() != ".osm") {
-		return tl::unexpected(fmt::format("OSM configuration file must have extension .osm, not {}",
-										  osm_path.extension().string()));
-	}
+// 	if (! (osm_path.has_extension()) || osm_path.extension().string() != ".osm") {
+// 		return tl::unexpected(fmt::format("OSM configuration file must have extension .osm, not {}",
+// 										  osm_path.extension().string()));
+// 	}
 
-	return ProgramOptions {
-		.port = static_cast<u16>(port),
-		.verbose = argv_parser.get<bool>("verbose"),
-		.sumo_port = static_cast<u16>(sumo_port),
-		.simulation_steps = simulation_steps,
-		.sumocfg_path = sumocfg_path,
-		.osm_path = osm_path,
-		// .gui = argv_parser.get<bool>("gui"),
-	};
-}
+// 	return ProgramOptions {
+// 		.port = static_cast<u16>(port),
+// 		.verbose = argv_parser.get<bool>("verbose"),
+// 		.sumo_port = static_cast<u16>(sumo_port),
+// 		.simulation_steps = simulation_steps,
+// 		.sumocfg_path = sumocfg_path,
+// 		.osm_path = osm_path,
+// 		.use_sumo_gui = false,
+// 		.spawn_sumo = false,
+// 		.streetlamp_distance_threshold = 10,
+// 		// .gui = argv_parser.get<bool>("gui"),
+// 	};
+// }
 
 auto between(const int x, const int min, const int max) -> bool {
 	return min <= x && x <= max;
@@ -781,8 +784,8 @@ auto main() -> int {
 	spdlog::info("Created thread pool with {} threads", pool.get_thread_count());
 
 	// const auto = options.streetlamp_distance_threshold;
-	const auto streetlamp_distance_threshold_doubled =
-		std::pow(options.streetlamp_distance_threshold, 2);
+	// const auto streetlamp_distance_threshold_doubled =
+	// 	std::pow(options.streetlamp_distance_threshold, 2);
 	// deallocate-inactive-cars-every
 	const auto do_deallocation_pass_every_n_steps =
 		config["sumo"]["deallocate-inactive-cars-every"].value_or(1000);
