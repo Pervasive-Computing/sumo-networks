@@ -10,17 +10,26 @@ layout {
         }
     }
     tab {
-        pane command="./build/sumo-sim-data-publisher"
-        pane command="sumo" {
-            args "-c" "katrinebjerg-lamp/katrinebjerg-lamp.sumocfg" "--remote-port" "10000"
-        }
+        pane split_direction="vertical" {
+            pane split_direction="horizontal" {
+                pane command="./build/sumo-sim-data-publisher"
 
-        pane command="pixi" {
-            args "run" "uwsgi" "--http" "0.0.0.0:8000" "--wsgi-file" "streetlamp-timeseries-server.py" "--callable" "app"
-        }
-
-        pane command="cargo" {
-            args "run" "--bin" "streetlamps-subscriber" "--release"
+                pane command="cargo" {
+                    args "run" "--bin" "streetlamps-subscriber" "--release"
+                }
+            }
+            pane split_direction="horizontal" {
+                pane command="sumo" {
+                    args "-c" "katrinebjerg-lamp/katrinebjerg-lamp.sumocfg" "--remote-port" "10000"
+                }
+                pane command="pixi" {
+                    args "run" "uwsgi" "--http" "0.0.0.0:8000" "--wsgi-file" "streetlamp-timeseries-server.py" "--callable" "app"
+                }
+                pane command="pixi" {
+                    args "run" "python3" "network.py"
+                    cwd "../python_network"
+                }
+            }
         }
     }
 }
