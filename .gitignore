@@ -181,3 +181,8 @@ pyrightconfig.json
 
 *.db
 *.sqlite3
+
+
+# Added by cargo
+
+/target

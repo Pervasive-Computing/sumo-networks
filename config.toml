@@ -30,3 +30,4 @@ publish-rate = 0.5    # in Hz
 
 [server.streetlamps]
 port = 12001
+db-path = "streetlamps.sqlite3"
