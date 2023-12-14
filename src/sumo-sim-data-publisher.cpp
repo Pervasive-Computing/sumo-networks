@@ -780,6 +780,7 @@ auto main() -> int {
 	BS::thread_pool pool(n_threads_in_pool);
 	spdlog::info("Created thread pool with {} threads", pool.get_thread_count());
 
+	// const auto = options.streetlamp_distance_threshold;
 	const auto streetlamp_distance_threshold_doubled =
 		std::pow(options.streetlamp_distance_threshold, 2);
 	// deallocate-inactive-cars-every
@@ -812,6 +813,8 @@ auto main() -> int {
 		// Keep track of the accumelated time of the simulation
 		const auto sim_step_timer = Timer {};
 		libtraci::Simulation::step();
+		// TODO: give a double value to step, to ensure an equal update across the entire simulation
+		// libtraci::Simulation::step();
 
 		{ // Get (x,y, theta) of all vehicles
 			const auto vehicles_ids = libtraci::Vehicle::getIDList();
@@ -861,12 +864,13 @@ auto main() -> int {
 				for (const auto& [_, car] : cars) {
 					// TODO: maybe not as x and y are quite large numbers
 					// TODO PERF: use squared distance instead of distance to avoid the sqrt call
-					const double distance = (car.x - lamp.lon) * (car.x - lamp.lon) +
-											(car.y - lamp.lat) * (car.y - lamp.lat);
-					// const double distance = std::hypot(car.x - lamp.lon, car.y - lamp.lat);
+					// const double distance = (car.x - lamp.lon) * (car.x - lamp.lon) +
+					// 						(car.y - lamp.lat) * (car.y - lamp.lat);
+					const double distance = std::hypot(car.x - lamp.lon, car.y - lamp.lat);
 
 					// streetlamp_distance_threshold_doubled
-					if (distance <= streetlamp_distance_threshold_doubled) {
+					// if (distance <= streetlamp_distance_threshold_doubled) {
+					if (distance <= options.streetlamp_distance_threshold) {
 						streetlamp_ids_with_vehicles_nearby[num_streetlamps_with_vehicles_nearby] =
 							lamp.id;
 						num_streetlamps_with_vehicles_nearby++;
