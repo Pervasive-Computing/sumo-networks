@@ -18,7 +18,16 @@ layout {
         pane command="pixi" {
             args "run" "uwsgi" "--http" "0.0.0.0:8000" "--wsgi-file" "streetlamp-timeseries-server.py" "--callable" "app"
         }
+
+        pane command="cargo" {
+            args "run" "--bin" "streetlamps-subscriber" "--release"
+        }
     }
+}
+
+env {
+    RUST_BACKTRACE 0
+    RUST_LOG "info"
 }
 
 pane_frames true
