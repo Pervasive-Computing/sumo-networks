@@ -737,7 +737,10 @@ auto main() -> int {
 	sock.bind(addr);
 	spdlog::info("Bound zmq PUB socket to {}", addr);
 
-	// zmq::socket_t sock_pub_sim_time(zmq_ctx, zmq::socket_type::pub);
+	zmq::socket_t sock_pub_sim_time(zmq_ctx, zmq::socket_type::pub);
+	sock_pub_sim_time.bind(fmt::format("tcp://*:{}",
+									   config["sumo"]["publisher"]["topics"]["time"]["port"]
+										   .value_or(10002)));
 
 	const int num_retries_sumo_sim_connect = 100;
 	libtraci::Simulation::init(options.sumo_port, num_retries_sumo_sim_connect, "localhost");
@@ -964,7 +967,7 @@ auto main() -> int {
 
 		const auto elapsed_sim_time = dt * simulation_step;
 		const auto timestamp = start_timestamp + std::lround(elapsed_sim_time);
-		sock.send(zmq::buffer(topic_time.name + std::to_string(timestamp)), zmq::send_flags::none);
+		sock_pub_sim_time.send(zmq::buffer(topic_time.name + std::to_string(timestamp)), zmq::send_flags::none);
 
 		{ // Publish information about which street lamps that have vehicles nearby
 			static auto last_publish_time = std::chrono::high_resolution_clock::now();

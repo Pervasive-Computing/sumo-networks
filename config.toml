@@ -33,6 +33,7 @@ publish-rate = 0.5   # in Hz
 enabled = true
 name = "time"
 publish-rate = 60 # in Hz
+port = 14005
 
 
 [server.streetlamps]
