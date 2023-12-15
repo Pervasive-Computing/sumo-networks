@@ -797,12 +797,39 @@ auto main() -> int {
 	int do_deallocation_pass_at_step = do_deallocation_pass_every_n_steps;
 
 	const auto start_datetime = [&] {
-		const auto start_datetime = config["sumo"]["start-datetime"];
-		if (!start_datetime.is_date_time()) {
-			spdlog::error("field: sumo.start-datetime in {} must be a date-time", "config.toml");
-			std::exit(1);
+		const auto start_datetime = config["sumo"]["start-datetime"].value<toml::date_time>();
+		if (!start_datetime.has_value()) {
+			// Use the current time as the start time
+			const auto now = std::chrono::system_clock::now();
+			const std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+
+			// Convert to tm struct
+			std::tm* now_tm = std::localtime(&now_c);
+
+			// Create a toml::date_time from the tm struct
+			toml::date_time dt {
+				toml::date{
+					static_cast<uint16_t>(now_tm->tm_year + 1900), // tm_year is the year since 1900
+					static_cast<uint8_t>(now_tm->tm_mon + 1),      // tm_mon is months since January (0-11)
+					static_cast<uint8_t>(now_tm->tm_mday)
+				},
+				toml::time{
+					static_cast<uint8_t>(now_tm->tm_hour),
+					static_cast<uint8_t>(now_tm->tm_min),
+					static_cast<uint8_t>(now_tm->tm_sec)
+				},
+			// If you need time offset and milliseconds, you can set them here
+			// For simplicity, they are omitted in this example
+			};
+
+			return dt;
 		}
-		return start_datetime.value<toml::date_time>().value();
+		// if (!start_datetime.is_date_time()) {
+		// 	spdlog::error("field: sumo.start-datetime in {} must be a date-time", "config.toml");
+		// 	std::exit(1);
+		// }
+		return start_datetime.value();
+		// return start_datetime.value<toml::date_time>().value();
 	}();
 
 	const auto start_timestamp = date_time_to_unix_timestamp(start_datetime);

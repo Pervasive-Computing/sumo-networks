@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use anyhow::Result;
-use env_logger::fmt::Timestamp;
 use serde::{Deserialize, Serialize};
 // use zmq;
 
