@@ -924,40 +924,40 @@ auto main() -> int {
 		auto multi_future =
 			pool.parallelize_loop(0, streetlamps.size(), look_for_cars_close_to_streetlamps);
 
-		{ // Publish information about the position and heading of all active cars
-			// TODO: rate limit the publish rate
-			static auto last_publish_time = std::chrono::high_resolution_clock::now();
-			const auto now = std::chrono::high_resolution_clock::now();
-			const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now -
-																						 last_publish_time);
-			// Convert HZ to milliseconds
-			// e.g. publish_rate = 10 Hz
-			const auto configured_publish_freq = 1000 / topic_cars.publish_rate;
-			if (elapsed.count() >= configured_publish_freq) {
-				json j; // { "1": { "x": 1, "y": 2, "heading": 3 }, "2": { "x": 1, "y": 2, "heading": 3 } }
-				// Find all cars that are alive and put them into a json object
-				for (auto& [vehicle_id, car] : cars) {
-					if (car.alive) {
-						car.alive = false; // Reset the alive flag to prevent staying alive forever
-						j[std::to_string(vehicle_id)] = car.to_json();
-					}
-				}
+		// { // Publish information about the position and heading of all active cars
+		// 	// TODO: rate limit the publish rate
+		// 	static auto last_publish_time = std::chrono::high_resolution_clock::now();
+		// 	const auto now = std::chrono::high_resolution_clock::now();
+		// 	const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now -
+		// 																				 last_publish_time);
+		// 	// Convert HZ to milliseconds
+		// 	// e.g. publish_rate = 10 Hz
+		// 	const auto configured_publish_freq = 1000 / topic_cars.publish_rate;
+		// 	if (elapsed.count() >= configured_publish_freq) {
+		// 		json j; // { "1": { "x": 1, "y": 2, "heading": 3 }, "2": { "x": 1, "y": 2, "heading": 3 } }
+		// 		// Find all cars that are alive and put them into a json object
+		// 		for (auto& [vehicle_id, car] : cars) {
+		// 			if (car.alive) {
+		// 				car.alive = false; // Reset the alive flag to prevent staying alive forever
+		// 				j[std::to_string(vehicle_id)] = car.to_json();
+		// 			}
+		// 		}
 
-				// Serialize to CBOR encoding format
-				const std::vector<u8> v = json::to_cbor(j);
-				const std::string	  payload(v.begin(), v.end());
-				// Publish the data to all clients
-				const auto flags = zmq::send_flags::none;
-				const auto send_result = sock.send(zmq::buffer(topic_cars.name + payload), flags);
-				if (! send_result.has_value()) {
-					spdlog::error("{}:{} Failed to publish data on topic {}", __FILE__, __LINE__,
-								topic_cars.name);
-				}
+		// 		// Serialize to CBOR encoding format
+		// 		const std::vector<u8> v = json::to_cbor(j);
+		// 		const std::string	  payload(v.begin(), v.end());
+		// 		// Publish the data to all clients
+		// 		const auto flags = zmq::send_flags::none;
+		// 		const auto send_result = sock.send(zmq::buffer(topic_cars.name + payload), flags);
+		// 		if (! send_result.has_value()) {
+		// 			spdlog::error("{}:{} Failed to publish data on topic {}", __FILE__, __LINE__,
+		// 						topic_cars.name);
+		// 		}
 
-				last_publish_time = now;
-				spdlog::info("Published data on topic {} after {} ms", topic_cars.name, elapsed.count());
-			}
-		}
+		// 		last_publish_time = now;
+		// 		spdlog::info("Published data on topic {} after {} ms", topic_cars.name, elapsed.count());
+		// 	}
+		// }
 
 		// Wait for all threads in the thread pool to finish
 		// NOTE: We do this here after the code that generates the data of all alive cars, to have
@@ -970,14 +970,14 @@ auto main() -> int {
 		sock_pub_sim_time.send(zmq::buffer(topic_time.name + std::to_string(timestamp)), zmq::send_flags::none);
 
 		{ // Publish information about which street lamps that have vehicles nearby
-			static auto last_publish_time = std::chrono::high_resolution_clock::now();
-			const auto now = std::chrono::high_resolution_clock::now();
-			const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now -
-																						 last_publish_time);
-			// Convert HZ to milliseconds
-			const auto configured_publish_freq = 1000 / topic_streetlamps.publish_rate;
+			// static auto last_publish_time = std::chrono::high_resolution_clock::now();
+			// const auto now = std::chrono::high_resolution_clock::now();
+			// const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now -
+			// 																			 last_publish_time);
+			// // Convert HZ to milliseconds
+			// const auto configured_publish_freq = 1000 / topic_streetlamps.publish_rate;
 			// spdlog::info("configured_publish_freq: {} elapsed.count() {}", configured_publish_freq, elapsed.count());
-			if (elapsed.count() >= configured_publish_freq) {
+			// if (elapsed.count() >= configured_publish_freq) {
 				// Create a ISO 8601 datetime string from start_datetime + elapsed_sim_time
 				// const auto datetime = start_datetime + std::chrono::seconds(std::lround(elapsed_sim_time));
 				// spdlog::info("datetime: {}", datetime);
@@ -999,9 +999,9 @@ auto main() -> int {
 					spdlog::error("{}:{} Failed to publish data on topic {}", __FILE__, __LINE__,
 								topic_streetlamps.name);
 				}
-				last_publish_time = now;
-				spdlog::info("Published data on topic {} after {} ms", topic_streetlamps.name, elapsed.count());
-			}
+				// last_publish_time = now;
+				// spdlog::info("Published data on topic {} after {} ms", topic_streetlamps.name, elapsed.count());
+			// }
 		}
 
 		{ // Update the progress bar
