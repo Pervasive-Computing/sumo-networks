@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Protocol
 
 import tomllib
-from flask import Flask, Response, g, jsonify, request
+from flask import Flask, Response, g, jsonify, make_response, request
 from loguru import logger
 
 if "FLASK_ENV" not in os.environ:
@@ -119,7 +119,7 @@ def get_timeseries(streetlamp_id: str) -> Response:
         case "median":
             reducer = Median()
         case _:
-            return jsonify({"error": "unknown reducer"})
+            return make_response(jsonify({"error": "unknown reducer"}), 400)
 
     match request.args.get("per", default="hour"):
         case "minute":
@@ -135,20 +135,20 @@ def get_timeseries(streetlamp_id: str) -> Response:
         case "month":
             per = timedelta(days=30)
         case _:
-            return jsonify({"error": "unknown per"})
+            return make_response(jsonify({"error": "unknown per"}), 400)
 
     if "start" not in request.args:
-        return jsonify({"error": "start is not specified"})
+        return make_response(jsonify({"error": "start is not specified"}), 400)
     start = int(request.args["start"])
     # start = datetime.fromtimestamp(int(request.args['start']))
 
     if "end" not in request.args:
-        return jsonify({"error": "end is not specified"})
+        return make_response(jsonify({"error": "end is not specified"}), 400)
     end = int(request.args["end"])
     # end = datetime.fromtimestamp(int(request.args['end']))
 
     if start > end:
-        return jsonify({"error": "start is greater than end"})
+        return make_response(jsonify({"error": "start is greater than end"}), 400)
 
     logger.debug(f"{start = } {end = } {per = } {reducer = }")
 
@@ -190,7 +190,7 @@ def get_timeseries(streetlamp_id: str) -> Response:
         len(reduced_light_levels) == num_bins
     ), f"{len(reduced_light_levels) = } != {num_bins = }"
 
-    return jsonify(reduced_light_levels)
+    return make_response(jsonify(reduced_light_levels), 200)
 
 
 if __name__ == "__main__":
