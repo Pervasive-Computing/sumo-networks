@@ -663,6 +663,13 @@ auto main() -> int {
 	};
 	pprint(topic_streetlamps);
 
+	const auto topic_time = Topic {
+		config["sumo"]["publisher"]["topics"]["time"].value_or("time"),
+		config["sumo"]["publisher"]["topics"]["time"]["publish-rate"].value_or(0.0),
+		config["sumo"]["publisher"]["topics"]["time"]["enabled"].value_or(false),
+	};
+	pprint(topic_time);
+
 	const auto sumo_home_path = [&]() {
 		auto result = get_sumo_home_directory_path();
 		if (result) {
@@ -729,6 +736,8 @@ auto main() -> int {
 	const std::string addr = fmt::format("tcp://*:{}", options.port);
 	sock.bind(addr);
 	spdlog::info("Bound zmq PUB socket to {}", addr);
+
+	// zmq::socket_t sock_pub_sim_time(zmq_ctx, zmq::socket_type::pub);
 
 	const int num_retries_sumo_sim_connect = 100;
 	libtraci::Simulation::init(options.sumo_port, num_retries_sumo_sim_connect, "localhost");
@@ -953,6 +962,10 @@ auto main() -> int {
 		// than calling .wait() right after the call to pool.parallelize_loop()
 		multi_future.wait();
 
+		const auto elapsed_sim_time = dt * simulation_step;
+		const auto timestamp = start_timestamp + std::lround(elapsed_sim_time);
+		sock.send(zmq::buffer(topic_time.name + std::to_string(timestamp)), zmq::send_flags::none);
+
 		{ // Publish information about which street lamps that have vehicles nearby
 			static auto last_publish_time = std::chrono::high_resolution_clock::now();
 			const auto now = std::chrono::high_resolution_clock::now();
@@ -962,8 +975,6 @@ auto main() -> int {
 			const auto configured_publish_freq = 1000 / topic_streetlamps.publish_rate;
 			// spdlog::info("configured_publish_freq: {} elapsed.count() {}", configured_publish_freq, elapsed.count());
 			if (elapsed.count() >= configured_publish_freq) {
-				const auto elapsed_sim_time = dt * simulation_step;
-				const auto timestamp = start_timestamp + std::lround(elapsed_sim_time);
 				// Create a ISO 8601 datetime string from start_datetime + elapsed_sim_time
 				// const auto datetime = start_datetime + std::chrono::seconds(std::lround(elapsed_sim_time));
 				// spdlog::info("datetime: {}", datetime);

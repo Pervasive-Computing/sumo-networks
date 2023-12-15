@@ -29,6 +29,11 @@ enabled = true
 name = "streetlamps"
 publish-rate = 0.5   # in Hz
 
+[sumo.publisher.topics.time]
+enabled = true
+name = "time"
+publish-rate = 60 # in Hz
+
 
 [server.streetlamps]
 port = 12001
