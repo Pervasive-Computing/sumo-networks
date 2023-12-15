@@ -12,20 +12,25 @@ layout {
     tab {
         pane split_direction="vertical" {
             pane split_direction="horizontal" {
-                pane command="./build/sumo-sim-data-publisher"
+                pane name="Sim Publisher" command="./build/sumo-sim-data-publisher"
 
-                pane command="cargo" {
+                pane name="Lamps to DB" command="cargo" {
                     args "run" "--bin" "streetlamps-subscriber" "--release"
+                }
+
+                pane name="Flutter" command="flutter" {
+                    args "run"
+                    cwd "../flutter_app"
                 }
             }
             pane split_direction="horizontal" {
-                pane command="sumo" {
+                pane name="SUMO" command="sumo" {
                     args "-c" "katrinebjerg-lamp/katrinebjerg-lamp.sumocfg" "--remote-port" "10000"
                 }
-                pane command="pixi" {
+                pane name="Graph Server" command="pixi" {
                     args "run" "uwsgi" "--http" "0.0.0.0:8000" "--wsgi-file" "streetlamp-timeseries-server.py" "--callable" "app"
                 }
-                pane command="pixi" {
+                pane name="Network & Logic" command="pixi" {
                     args "run" "python3" "network.py"
                     cwd "../python_network"
                 }
