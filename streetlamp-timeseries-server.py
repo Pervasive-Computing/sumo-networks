@@ -4,8 +4,8 @@ import argparse
 import os
 import sqlite3
 import sys
-from dataclasses import asdict, astuple, dataclass
-from datetime import datetime, timedelta
+from dataclasses import dataclass
+from datetime import timedelta
 from pathlib import Path
 from typing import Protocol
 
@@ -37,17 +37,18 @@ argv_parser.add_argument(
 )
 
 args = argv_parser.parse_args(sys.argv[1:])
+print(f"{args = }")
+
+logger.info(f"{sqlite3.sqlite_version = }")
 
 if args.verbose:
     logger.remove()
     logger.add(sys.stderr, level="INFO")
 
-# if args.debug:
-#     print("gotta debug")
-#     logger.remove()
-#     logger.add(sys.stderr, level="DEBUG")
-#     logger.debug(f"{args = }")
-
+if args.debug:
+    logger.remove()
+    logger.add(sys.stderr, level="DEBUG")
+    logger.debug(f"{args = }")
 
 class Reducer(Protocol):
     def reduce(self, xs: list[float]) -> float:
@@ -104,9 +105,10 @@ def close_connection(exception) -> None:
         db.close()
 
 
+# NOTE: use str instead of int for streetlamp_id because Flask can not route properly
+# with int, when the id is negative
 @app.route("/streetlamp/<string:streetlamp_id>/lightlevels", methods=["GET"])
 def get_timeseries(streetlamp_id: str) -> Response:
-    streetlamp_id = int(streetlamp_id)
     logger.info(f"{streetlamp_id = }")
     logger.debug(f"{request.url = }")
     if args.debug:
@@ -140,15 +142,13 @@ def get_timeseries(streetlamp_id: str) -> Response:
     if "start" not in request.args:
         return make_response(jsonify({"error": "start is not specified"}), 400)
     start = int(request.args["start"])
-    # start = datetime.fromtimestamp(int(request.args['start']))
 
     if "end" not in request.args:
         return make_response(jsonify({"error": "end is not specified"}), 400)
     end = int(request.args["end"])
-    # end = datetime.fromtimestamp(int(request.args['end']))
 
     if start > end:
-        return make_response(jsonify({"error": "start is greater than end"}), 400)
+        return make_response(jsonify({"error": f"{start = } is greater than {end = }"}), 400)
 
     logger.debug(f"{start = } {end = } {per = } {reducer = }")
 
@@ -159,7 +159,6 @@ def get_timeseries(streetlamp_id: str) -> Response:
     WHERE streetlamp_id = ? and timestamp BETWEEN ? AND ?
     ORDER BY timestamp ASC;
 """
-
     cursor.execute(query, (streetlamp_id, start, end))
     # cursor.execute("select * from streetlamps;")
     rows = cursor.fetchall()
