@@ -1,4 +1,4 @@
-verbose = false
+verbose = true
 
 [sumo]
 port = 10000

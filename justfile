@@ -1,5 +1,5 @@
 builddir := "build"
-buildmode := "Release"
+buildmode := "Debug"
 generator := "Ninja"
 cxx := "/usr/bin/g++"
 
