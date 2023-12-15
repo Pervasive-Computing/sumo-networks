@@ -9,7 +9,7 @@ from dataclasses import astuple, dataclass
 from pathlib import Path
 
 from loguru import logger
-from result import Err, Ok, Result, is_err, is_ok
+from result import Err, Ok, Result, is_err  # , is_ok
 
 # Check if rich is installed, and only import it if it is.
 try:
@@ -50,6 +50,22 @@ def parse_streetlamps_from_osm(osm_file_path: Path) -> Result[list[StreetLamp], 
         streetlamps.append(StreetLamp(id, lat, lon))
 
     return Ok(streetlamps)
+
+
+def create_streetlamps_db(db_file_path: Path) -> Result[None, str]:
+    if db_file_path.exists():
+        return Err(f"File {db_file_path} already exists")
+
+    db = sqlite3.connect(db_file_path)
+    cursor = db.cursor()
+    # Read sql statements from setup file and execute them
+    with open("create-streetlamps-db.sql") as f:
+        sql = f.read()
+        cursor.executescript(sql)
+
+    db.close()
+
+    return Ok(None)
 
 
 def main() -> int:
@@ -99,7 +115,9 @@ def main() -> int:
     db.commit()
 
     db.close()
-    logger.info(f"Inserted {len(streetlamps) = } streetlamps into {args.db_file_path = }")
+    logger.info(
+        f"Inserted {len(streetlamps) = } streetlamps into {args.db_file_path = }"
+    )
     return 0
 
 
