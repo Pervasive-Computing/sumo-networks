@@ -4,6 +4,6 @@
         "conan": {}
     },
     "include": [
-        "/mnt/c/Users/dbior/OneDrive - Aarhus Universitet/Skrivebord/sumo-networks1/build/CMakePresets.json"
+        "/home/kpbaks/university/semesters/9/pervasive-computing-study-course/sumo-networks/build/CMakePresets.json"
     ]
 }

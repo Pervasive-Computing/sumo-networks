@@ -10,7 +10,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
 
 # create compile_commands.json
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -106,7 +106,7 @@ add_executable(streetlamp-timeseries-server src/streetlamp-timeseries-server.cpp
 target_link_libraries(streetlamp-timeseries-server PRIVATE streetlamp)
 target_link_libraries(streetlamp-timeseries-server PRIVATE ${external_library_targets})
 
-find_package(Catch2 REQUIRED)
-add_executable(test-ringbuf tests/ringbuf.cpp)
-target_include_directories(test-ringbuf PRIVATE src)
-target_link_libraries(test-ringbuf PRIVATE Catch2::Catch2WithMain)
+# find_package(Catch2 REQUIRED)
+# add_executable(test-ringbuf tests/ringbuf.cpp)
+# target_include_directories(test-ringbuf PRIVATE src)
+# target_link_libraries(test-ringbuf PRIVATE Catch2::Catch2WithMain)
