@@ -792,7 +792,8 @@ auto main() -> int {
 	const auto n_threads_in_pool = n_hardware_threads - 1;
 
 	// Constructs a thread pool with as many threads as available in the hardware.
-	BS::thread_pool pool(n_threads_in_pool);
+// BS::thread_pool pool(n_threads_in_pool);
+	BS::thread_pool pool(2);
 	spdlog::info("Created thread pool with {} threads", pool.get_thread_count());
 
 	// const auto = options.streetlamp_distance_threshold;
@@ -898,10 +899,19 @@ auto main() -> int {
 			do_deallocation_pass_at_step += do_deallocation_pass_every_n_steps;
 		}
 
-		std::atomic<int> num_streetlamps_with_vehicles_nearby = 0;
+		// Zero out the streetlamp_ids_with_vehicles_nearby vector
+		std::fill(streetlamp_ids_with_vehicles_nearby.begin(),
+				  streetlamp_ids_with_vehicles_nearby.end(), 0);
+
+		// std::atomic<int> num_streetlamps_with_vehicles_nearby = 0;
+		int num_streetlamps_with_vehicles_nearby = 0;
 		// Check if any cars are close to a street lamp
 		const auto look_for_cars_close_to_streetlamps = [&](const auto start, const auto end) {
 			for (auto idx = start; idx < end; ++idx) {
+				if(idx >= streetlamps.size()) {
+					spdlog::error("{}:{} idx >= streetlamps.size()", __FILE__, __LINE__);
+					std::exit(1);
+				}
 				const auto lamp = streetlamps[idx];
 				for (const auto& [_, car] : cars) {
 					// TODO: maybe not as x and y are quite large numbers
@@ -913,7 +923,12 @@ auto main() -> int {
 					// streetlamp_distance_threshold_doubled
 					// if (distance <= streetlamp_distance_threshold_doubled) {
 					if (distance <= options.streetlamp_distance_threshold) {
-						streetlamp_ids_with_vehicles_nearby[num_streetlamps_with_vehicles_nearby] =
+						// if (num_streetlamps_with_vehicles_nearby >= streetlamps.size()) {
+						// 	spdlog::error("{}:{} num_streetlamps_with_vehicles_nearby ({}) >= streetlamps.size() ({})", __FILE__, __LINE__, num_streetlamps_with_vehicles_nearby, streetlamps.size());
+						// 	std::exit(1);
+						// }
+						// spdlog::info("Car is close to streetlamp {}",  lamp.id);
+						streetlamp_ids_with_vehicles_nearby[idx] =
 							lamp.id;
 						num_streetlamps_with_vehicles_nearby++;
 					}
@@ -921,8 +936,10 @@ auto main() -> int {
 			}
 		};
 
-		auto multi_future =
-			pool.parallelize_loop(0, streetlamps.size(), look_for_cars_close_to_streetlamps);
+		look_for_cars_close_to_streetlamps(0, streetlamps.size());
+
+		// auto multi_future =
+		// 	pool.parallelize_loop(0, streetlamps.size(), look_for_cars_close_to_streetlamps);
 
 		// { // Publish information about the position and heading of all active cars
 		// 	// TODO: rate limit the publish rate
@@ -963,7 +980,7 @@ auto main() -> int {
 		// NOTE: We do this here after the code that generates the data of all alive cars, to have
 		// the main thread do something while we wait for the other threads to finish This is better
 		// than calling .wait() right after the call to pool.parallelize_loop()
-		multi_future.wait();
+		// multi_future.wait();
 
 		const auto elapsed_sim_time = dt * simulation_step;
 		const auto timestamp = start_timestamp + std::lround(elapsed_sim_time);
@@ -980,12 +997,15 @@ auto main() -> int {
 			// if (elapsed.count() >= configured_publish_freq) {
 				// Create a ISO 8601 datetime string from start_datetime + elapsed_sim_time
 				// const auto datetime = start_datetime + std::chrono::seconds(std::lround(elapsed_sim_time));
-				// spdlog::info("datetime: {}", datetime);
 				json j {
 					{"timestamp", timestamp},
 				};
 				json array = json::array();
-				for (int idx = 0; idx < num_streetlamps_with_vehicles_nearby; ++idx) {
+				for (int idx = 0; idx < streetlamp_ids_with_vehicles_nearby.size(); ++idx) {
+					if (streetlamp_ids_with_vehicles_nearby[idx] == 0) {
+						continue;
+					}
+					// spdlog::info("streetlamp_ids_with_vehicles_nearby[{}] = {}", idx, streetlamp_ids_with_vehicles_nearby[idx]);
 					array.push_back(streetlamp_ids_with_vehicles_nearby[idx]);
 				}
 				j["streetlamps"] = array;
