@@ -792,8 +792,8 @@ auto main() -> int {
 	const auto n_threads_in_pool = n_hardware_threads - 1;
 
 	// Constructs a thread pool with as many threads as available in the hardware.
-// BS::thread_pool pool(n_threads_in_pool);
-	BS::thread_pool pool(2);
+	BS::thread_pool pool(n_threads_in_pool);
+	// BS::thread_pool pool(2);
 	spdlog::info("Created thread pool with {} threads", pool.get_thread_count());
 
 	// const auto = options.streetlamp_distance_threshold;
@@ -936,10 +936,10 @@ auto main() -> int {
 			}
 		};
 
-		look_for_cars_close_to_streetlamps(0, streetlamps.size());
+		// look_for_cars_close_to_streetlamps(0, streetlamps.size());
 
-		// auto multi_future =
-		// 	pool.parallelize_loop(0, streetlamps.size(), look_for_cars_close_to_streetlamps);
+		auto multi_future =
+			pool.parallelize_loop(0, streetlamps.size(), look_for_cars_close_to_streetlamps);
 
 		// { // Publish information about the position and heading of all active cars
 		// 	// TODO: rate limit the publish rate
@@ -980,7 +980,7 @@ auto main() -> int {
 		// NOTE: We do this here after the code that generates the data of all alive cars, to have
 		// the main thread do something while we wait for the other threads to finish This is better
 		// than calling .wait() right after the call to pool.parallelize_loop()
-		// multi_future.wait();
+		multi_future.wait();
 
 		const auto elapsed_sim_time = dt * simulation_step;
 		const auto timestamp = start_timestamp + std::lround(elapsed_sim_time);
