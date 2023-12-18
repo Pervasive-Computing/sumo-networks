@@ -5,9 +5,9 @@ port = 10000
 sumocfg-path = "katrinebjerg-lamp/katrinebjerg-lamp.sumocfg"
 osm-path = "katrinebjerg-lamp/katrinebjerg-lamp.osm"
 simulation-steps = 1000000
-deallocate-inactive-cars-every = 10000   # in simulation steps
-# start-datetime = 2023-12-14T22:00:00Z    # ISO 8601
-delay-per-simulated-second = 0.1         # in seconds
+deallocate-inactive-cars-every = 10000                       # in simulation steps
+start-datetime = 2023-12-14T22:00:00Z                        # ISO 8601
+delay-per-simulated-second = 0.1                             # in seconds
 
 [sumo.spawn]
 enabled = true
